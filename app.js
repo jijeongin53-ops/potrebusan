@@ -227,10 +227,20 @@ function renderStoryContent(data) {
   document.getElementById('story-title').textContent = data.title;
   document.getElementById('story-description').textContent = data.description;
   const coverImg = document.getElementById('cover-image');
-  coverImg.src = convertDriveLink(data.imageUrl); // 이미지도 구글 드라이브 호환 변환
+  
+  // 이미지 전용 구글 드라이브 링크 변환 (썸네일 API 사용, 브라우저 표시 오류 방지)
+  let imgUrl = data.imageUrl || '';
+  if (imgUrl.includes('drive.google.com')) {
+    const match = imgUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (match) imgUrl = `https://drive.google.com/thumbnail?id=${match[1]}&sz=w800`;
+  }
+  coverImg.src = imgUrl;
   
   const finalAudioUrl = convertDriveLink(data.audioUrl);
-  document.getElementById('audio-player').src = finalAudioUrl;
+  const audioEl = document.getElementById('audio-player');
+  // 구글 드라이브 재생 시 CORS 우회를 위해 속성 강제 제거
+  audioEl.removeAttribute('crossorigin'); 
+  audioEl.src = finalAudioUrl;
   
   // 다운로드 버튼에 필요한 정보 저장
   const downloadBtn = document.getElementById('download-btn');
