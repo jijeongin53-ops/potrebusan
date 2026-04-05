@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="description" content="Busan Audio Stories — Discover the hidden tales of Busan through an immersive audio journey. Scan QR codes at local spots to listen." />
+  <meta name="theme-color" content="#3b2a1a" />
+
+  <title>Busan Audio Stories</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts: Playfair Display (Headers) + Inter (Body) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Font Awesome Icons CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+  <!-- Tailwind Custom Config -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            // 빈티지 따뜻한 팔레트
+            sepia: {
+              50:  '#fdf8f0',
+              100: '#f5e6c8',
+              200: '#e8c98a',
+              300: '#d4a855',
+              400: '#b8893a',
+              500: '#9a6f2b',
+              600: '#7d5820',
+              700: '#5e4016',
+              800: '#3e2b0e',
+              900: '#1f1507',
+            },
+            warm: {
+              50:  '#faf7f4',
+              100: '#f2ebe0',
+              200: '#e0d0b8',
+              300: '#c8b090',
+              400: '#a8906a',
+              500: '#8a7050',
+              600: '#6e5838',
+              700: '#524028',
+              800: '#362818',
+              900: '#1a140c',
+            },
+            parchment: '#f5e6c8',
+            ink:       '#2c1a0e',
+          },
+          fontFamily: {
+            serif: ['Playfair Display', 'Georgia', 'serif'],
+            sans:  ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    /* ─── 글로벌 스타일 ─── */
+    * { box-sizing: border-box; }
+
+    body {
+      background-color: #1a1008;
+      font-family: 'Inter', sans-serif;
+      overscroll-behavior: none;
+    }
+
+    /* 배경 텍스처: 빈티지 노이즈 그레인 */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* 앨범 아트 이미지 — 부드러운 sepia 필터 */
+    #cover-image {
+      filter: sepia(30%) contrast(1.05) brightness(0.95);
+      transition: filter 0.4s ease;
+    }
+    #cover-image:hover {
+      filter: sepia(10%) contrast(1.08) brightness(1.0);
+    }
+
+    /* 진행률 바 커스텀 스타일 */
+    #progress-bar {
+      -webkit-appearance: none;
+      appearance: none;
+      cursor: pointer;
+      outline: none;
+    }
+    #progress-bar::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      background: #d4a855;
+      border: 2px solid #3e2b0e;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+      cursor: pointer;
+    }
+    #progress-bar::-moz-range-thumb {
+      width: 18px; height: 18px;
+      border-radius: 50%;
+      background: #d4a855;
+      border: 2px solid #3e2b0e;
+      cursor: pointer;
+    }
+    #progress-bar::-webkit-slider-runnable-track {
+      height: 6px;
+      border-radius: 3px;
+      background: linear-gradient(to right, #d4a855 var(--progress, 0%), #3e2b0e var(--progress, 0%));
+    }
+    #progress-bar::-moz-range-track {
+      height: 6px;
+      border-radius: 3px;
+      background: #3e2b0e;
+    }
+    #progress-bar::-moz-range-progress {
+      background: #d4a855;
+      height: 6px;
+      border-radius: 3px;
+    }
+
+    /* 재생 버튼 Pulse 애니메이션 (재생 중일 때) */
+    @keyframes pulseRing {
+      0%   { box-shadow: 0 0 0 0 rgba(212,168,85,0.5); }
+      70%  { box-shadow: 0 0 0 14px rgba(212,168,85,0); }
+      100% { box-shadow: 0 0 0 0 rgba(212,168,85,0); }
+    }
+    .playing-pulse {
+      animation: pulseRing 1.8s ease-out infinite;
+    }
+
+    /* 음파 시각화 바 */
+    @keyframes wave {
+      0%, 100% { transform: scaleY(0.3); }
+      50%       { transform: scaleY(1.0); }
+    }
+    .wave-bar {
+      width: 4px;
+      border-radius: 2px;
+      background: #d4a855;
+      transform-origin: bottom;
+      animation: wave 1.2s ease-in-out infinite;
+    }
+    .wave-bar:nth-child(2) { animation-delay: 0.15s; }
+    .wave-bar:nth-child(3) { animation-delay: 0.30s; }
+    .wave-bar:nth-child(4) { animation-delay: 0.45s; }
+    .wave-bar:nth-child(5) { animation-delay: 0.60s; }
+    .wave-bar.paused { animation-play-state: paused; }
+
+    /* 언어 버튼 활성화 */
+    .lang-btn.active {
+      background-color: #d4a855;
+      color: #1a1008;
+    }
+
+    /* 페이드인 트랜지션 */
+    .fade-in {
+      animation: fadeIn 0.6s ease both;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(12px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* 스피너 */
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { animation: spin 1s linear infinite; }
+
+    /* 스크롤바 숨김 */
+    ::-webkit-scrollbar { width: 0; }
+  </style>
+</head>
+
+<body class="min-h-screen flex flex-col relative z-10">
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 1: 헤더
+  ══════════════════════════════════════════════════ -->
+  <header class="w-full px-4 pt-5 pb-3 flex items-center justify-between z-20 relative">
+    <!-- 로고 -->
+    <div class="flex items-center gap-2">
+      <div class="w-9 h-9 rounded-full bg-sepia-300 flex items-center justify-center shadow-lg">
+        <i class="fa-solid fa-headphones text-warm-900 text-base"></i>
+      </div>
+      <div>
+        <p class="text-sepia-200 font-serif text-sm font-semibold leading-tight tracking-wide">Busan Audio</p>
+        <p class="text-sepia-500 text-xs leading-none tracking-widest uppercase">Stories</p>
+      </div>
+    </div>
+
+    <!-- 다국어 전환 버튼 -->
+    <div class="flex items-center gap-1 bg-warm-900 rounded-full px-1.5 py-1 shadow-inner" id="lang-switcher">
+      <button class="lang-btn active text-xs font-semibold px-3 py-1 rounded-full transition-all duration-200" data-lang="en">EN</button>
+      <button class="lang-btn text-sepia-400 text-xs font-semibold px-3 py-1 rounded-full transition-all duration-200" data-lang="ko">한</button>
+      <button class="lang-btn text-sepia-400 text-xs font-semibold px-3 py-1 rounded-full transition-all duration-200" data-lang="ja">日</button>
+    </div>
+  </header>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 2: 로딩 화면
+  ══════════════════════════════════════════════════ -->
+  <div id="loading-screen" class="flex-1 flex flex-col items-center justify-center px-6 gap-6">
+    <div class="relative">
+      <div class="w-24 h-24 rounded-2xl bg-warm-800 shadow-2xl flex items-center justify-center">
+        <i class="fa-solid fa-book-open text-sepia-300 text-4xl spinner"></i>
+      </div>
+    </div>
+    <div class="text-center">
+      <p class="text-sepia-200 font-serif text-lg" id="loading-text">Loading story...</p>
+      <p class="text-sepia-500 text-sm mt-1">부산의 이야기를 불러오는 중입니다</p>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 3: 에러 화면
+  ══════════════════════════════════════════════════ -->
+  <div id="error-screen" class="hidden flex-1 flex flex-col items-center justify-center px-6 gap-5 text-center">
+    <div class="w-20 h-20 rounded-2xl bg-warm-800 flex items-center justify-center shadow-xl">
+      <i class="fa-solid fa-triangle-exclamation text-sepia-400 text-3xl"></i>
+    </div>
+    <div>
+      <h2 class="text-sepia-100 font-serif text-xl font-semibold" id="error-title">Story Not Found</h2>
+      <p class="text-sepia-400 text-sm mt-2 leading-relaxed" id="error-desc">We couldn't load this audio story.<br/>Please check the QR code and try again.</p>
+    </div>
+    <button onclick="window.location.reload()" class="mt-2 px-6 py-3 bg-sepia-600 text-sepia-100 text-sm font-semibold rounded-full shadow-lg active:scale-95 transition-transform">
+      <i class="fa-solid fa-rotate-right mr-2"></i>Try Again
+    </button>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 4: 메인 콘텐츠 (API 로드 후 표시)
+  ══════════════════════════════════════════════════ -->
+  <main id="main-content" class="hidden flex-1 flex flex-col px-4 pb-4 pt-2 gap-5 relative z-10 overflow-y-auto fade-in" style="padding-bottom: 220px;">
+
+    <!-- 앨범 아트 / 책 표지 -->
+    <div class="relative w-full max-w-sm mx-auto">
+      <!-- 그림자 레이어 (입체감) -->
+      <div class="absolute inset-x-4 bottom-0 h-8 bg-black/40 blur-xl rounded-full translate-y-2"></div>
+
+      <!-- 표지 이미지 컨테이너 -->
+      <div class="relative rounded-2xl overflow-hidden shadow-2xl border border-warm-700/40 aspect-square">
+        <img
+          id="cover-image"
+          src=""
+          alt="Audio Story Cover"
+          class="w-full h-full object-cover"
+          loading="eager"
+        />
+        <!-- 빈티지 오버레이 그라디언트 -->
+        <div class="absolute inset-0 bg-gradient-to-t from-warm-900/60 via-transparent to-warm-900/10 pointer-events-none"></div>
+
+        <!-- 재생 중 음파 시각화 (이미지 하단에 오버레이) -->
+        <div id="wave-visualizer" class="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-end gap-1 hidden">
+          <div class="wave-bar h-3 paused"></div>
+          <div class="wave-bar h-5 paused"></div>
+          <div class="wave-bar h-8 paused"></div>
+          <div class="wave-bar h-6 paused"></div>
+          <div class="wave-bar h-4 paused"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 제목 + 설명 -->
+    <div class="px-1 fade-in">
+      <!-- 로케이션 태그 -->
+      <div class="flex items-center gap-1.5 mb-2">
+        <i class="fa-solid fa-location-dot text-sepia-400 text-xs"></i>
+        <span class="text-sepia-400 text-xs tracking-widest uppercase font-medium">Busan, Korea</span>
+      </div>
+
+      <!-- 제목 -->
+      <h1 id="story-title" class="text-sepia-100 font-serif text-2xl font-bold leading-snug mb-3">
+        The Memory of Bosu-dong
+      </h1>
+
+      <!-- 구분선: 빈티지 장식선 -->
+      <div class="flex items-center gap-2 mb-3">
+        <div class="h-px flex-1 bg-gradient-to-r from-transparent to-sepia-600/50"></div>
+        <i class="fa-solid fa-star text-sepia-600 text-xs"></i>
+        <div class="h-px flex-1 bg-gradient-to-l from-transparent to-sepia-600/50"></div>
+      </div>
+
+      <!-- 설명 -->
+      <p id="story-description" class="text-warm-300 text-sm leading-relaxed">
+        A 30-minute immersive audio journey through the old book alleys of Bosu-dong...
+      </p>
+    </div>
+
+  </main>
+
+  <!-- ═══════════════════════════════════════════════
+       SECTION 5: 하단 고정 오디오 플레이어
+  ══════════════════════════════════════════════════ -->
+  <footer id="player-footer" class="hidden fixed bottom-0 left-0 right-0 z-30">
+    <!-- 상단 블러 그라디언트 (콘텐츠와 자연스러운 연결) -->
+    <div class="h-8 bg-gradient-to-t from-warm-900 to-transparent pointer-events-none"></div>
+
+    <!-- 플레이어 본체 -->
+    <div class="bg-warm-900 border-t border-warm-700/50 shadow-[0_-8px_32px_rgba(0,0,0,0.6)] px-5 pt-4 pb-6">
+
+      <!-- ─ 진행률 바 섹션 ─ -->
+      <div class="flex items-center gap-3 mb-4">
+        <!-- 현재 재생 시간 -->
+        <span id="current-time" class="text-sepia-400 text-xs font-medium w-10 text-right tabular-nums">0:00</span>
+
+        <!-- 슬라이더 진행률 바 -->
+        <div class="flex-1 relative">
+          <input
+            type="range"
+            id="progress-bar"
+            min="0"
+            max="100"
+            value="0"
+            step="0.1"
+            class="w-full h-1.5 rounded-full bg-warm-700 outline-none"
+            style="--progress: 0%;"
+            aria-label="Audio progress"
+          />
+        </div>
+
+        <!-- 전체 재생 시간 -->
+        <span id="total-time" class="text-sepia-400 text-xs font-medium w-10 tabular-nums">0:00</span>
+      </div>
+
+      <!-- ─ 컨트롤 버튼 섹션 ─ -->
+      <div class="flex items-center justify-between">
+
+        <!-- 왼쪽: 다운로드 버튼 -->
+        <button
+          id="download-btn"
+          class="flex flex-col items-center gap-1 group"
+          aria-label="Download audio"
+          title="Download for offline listening"
+        >
+          <div class="w-11 h-11 rounded-full bg-warm-800 border border-warm-600/40 flex items-center justify-center shadow-md active:scale-90 transition-transform group-hover:bg-warm-700">
+            <i class="fa-solid fa-download text-sepia-300 text-sm"></i>
+          </div>
+          <span class="text-sepia-500 text-xs" id="download-label">Save</span>
+        </button>
+
+        <!-- 중앙: 재생/일시정지 버튼 -->
+        <button
+          id="play-pause-btn"
+          class="w-16 h-16 rounded-full bg-sepia-300 flex items-center justify-center shadow-xl active:scale-90 transition-all duration-150"
+          aria-label="Play or Pause"
+        >
+          <i id="play-icon" class="fa-solid fa-play text-warm-900 text-xl ml-1"></i>
+        </button>
+
+        <!-- 오른쪽: 15초 앞으로 버튼 -->
+        <button
+          id="forward-btn"
+          class="flex flex-col items-center gap-1 group"
+          aria-label="Skip forward 15 seconds"
+        >
+          <div class="w-11 h-11 rounded-full bg-warm-800 border border-warm-600/40 flex items-center justify-center shadow-md active:scale-90 transition-transform group-hover:bg-warm-700">
+            <i class="fa-solid fa-forward-step text-sepia-300 text-sm"></i>
+          </div>
+          <span class="text-sepia-500 text-xs">+15s</span>
+        </button>
+
+      </div>
+
+      <!-- ─ 안전 패딩 (iOS 홈 인디케이터) ─ -->
+      <div class="h-safe-area-inset-bottom" style="height: env(safe-area-inset-bottom, 8px);"></div>
+    </div>
+  </footer>
+
+  <!-- 숨겨진 오디오 엘리먼트 -->
+  <audio id="audio-player" preload="metadata" crossorigin="anonymous"></audio>
+
+  <!-- app.js 로드 -->
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QR코드 관리 — Busan Audio Stories</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+
+  <!-- QRCode.js 라이브러리 (클라이언트 사이드 QR 생성) -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            sepia: {
+              200: '#e8c98a', 300: '#d4a855', 400: '#b8893a',
+              500: '#9a6f2b', 600: '#7d5820', 700: '#5e4016',
+              800: '#3e2b0e', 900: '#1f1507',
+            },
+            warm: {
+              700: '#524028', 800: '#362818', 900: '#1a140c',
+            },
+          },
+          fontFamily: {
+            serif: ['Playfair Display', 'Georgia', 'serif'],
+            sans:  ['Inter', 'system-ui', 'sans-serif'],
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    body { background: #1a140c; font-family: 'Inter', sans-serif; }
+
+    /* QR코드 캔버스 크기 고정 */
+    .qr-box canvas,
+    .qr-box img { width: 180px !important; height: 180px !important; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .card { animation: fadeIn 0.4s ease both; }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { animation: spin 1s linear infinite; }
+
+    /* 다운로드 버튼 hover */
+    .dl-btn:hover { background: #d4a855; color: #1a140c; }
+  </style>
+</head>
+
+<body class="min-h-screen p-4 md:p-8">
+
+  <!-- 헤더 -->
+  <header class="max-w-5xl mx-auto mb-8">
+    <div class="flex items-center gap-3 mb-2">
+      <div class="w-10 h-10 rounded-full bg-sepia-300 flex items-center justify-center shadow-lg flex-shrink-0">
+        <i class="fa-solid fa-qrcode text-warm-900 text-lg"></i>
+      </div>
+      <div>
+        <h1 class="text-sepia-200 font-serif text-xl font-bold leading-tight">QR코드 관리</h1>
+        <p class="text-sepia-500 text-xs tracking-widest uppercase">Busan Audio Stories</p>
+      </div>
+    </div>
+
+    <!-- 배포 URL 입력 -->
+    <div class="mt-4 bg-warm-800 rounded-xl p-4 border border-warm-700/50">
+      <label class="text-sepia-400 text-xs font-medium uppercase tracking-widest block mb-2">
+        <i class="fa-solid fa-globe mr-1"></i> 배포된 웹앱 URL (Vercel 도메인)
+      </label>
+      <div class="flex gap-2">
+        <input
+          id="base-url"
+          type="url"
+          placeholder="https://your-app.vercel.app"
+          value=""
+          class="flex-1 bg-warm-900 border border-sepia-700/40 rounded-lg px-3 py-2 text-sepia-200 text-sm outline-none focus:border-sepia-400 transition-colors"
+        />
+        <button
+          id="refresh-btn"
+          onclick="loadAllStories()"
+          class="px-4 py-2 bg-sepia-600 hover:bg-sepia-500 text-sepia-100 text-sm font-semibold rounded-lg transition-colors flex items-center gap-2"
+        >
+          <i class="fa-solid fa-rotate-right"></i> 생성
+        </button>
+      </div>
+      <p class="text-sepia-600 text-xs mt-2">
+        로컬 테스트: <code class="text-sepia-400">http://localhost:3030</code>
+        &nbsp;|&nbsp; 배포 후: Vercel에서 제공하는 도메인을 입력하세요
+      </p>
+    </div>
+  </header>
+
+  <!-- 로딩 -->
+  <div id="loading-section" class="max-w-5xl mx-auto text-center py-16 hidden">
+    <i class="fa-solid fa-spinner text-sepia-400 text-3xl spinner mb-4 block"></i>
+    <p class="text-sepia-400">구글 시트에서 스토리 목록을 불러오는 중...</p>
+  </div>
+
+  <!-- 에러 -->
+  <div id="error-section" class="max-w-5xl mx-auto text-center py-16 hidden">
+    <i class="fa-solid fa-triangle-exclamation text-sepia-400 text-3xl mb-4 block"></i>
+    <p id="error-msg" class="text-sepia-300 font-semibold mb-2">오류가 발생했습니다</p>
+    <p class="text-sepia-500 text-sm">구글 시트 공유 설정을 확인하고 다시 시도하세요.</p>
+  </div>
+
+  <!-- 비어있음 안내 -->
+  <div id="empty-section" class="max-w-5xl mx-auto text-center py-16 hidden">
+    <i class="fa-solid fa-inbox text-sepia-600 text-3xl mb-4 block"></i>
+    <p class="text-sepia-300 font-semibold mb-2">시트에 스토리 데이터가 없습니다</p>
+    <p class="text-sepia-500 text-sm">구글 시트 「오디오 파일 저장소」 탭에 헤더(1행)와 데이터(2행~)를 입력해 주세요.</p>
+    <div class="mt-4 bg-warm-800 rounded-lg p-3 text-left inline-block text-xs font-mono text-sepia-300">
+      id &nbsp;| title | description | imageUrl | audioUrl
+    </div>
+  </div>
+
+  <!-- QR 카드 그리드 -->
+  <div id="cards-grid" class="max-w-5xl mx-auto grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+    <!-- JS로 동적 생성 -->
+  </div>
+
+  <!-- 전체 인쇄 버튼 -->
+  <div id="print-bar" class="max-w-5xl mx-auto mt-8 hidden">
+    <button onclick="window.print()" class="w-full py-3 border border-sepia-600 text-sepia-300 hover:bg-sepia-800 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2">
+      <i class="fa-solid fa-print"></i> 모든 QR코드 인쇄
+    </button>
+  </div>
+
+  <script>
+  /* ═══════════════════════════════════════════════════════
+     구글 시트 설정 (app.js와 동일하게 유지)
+  ═══════════════════════════════════════════════════════ */
+  const SHEET_ID  = '1bUHqT4Rmg4nQ9jsBUYM_Ef9CrUfgZEHAXBk0Gj2LCRY';
+  const SHEET_GID = '1030888258';
+  const SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${SHEET_GID}`;
+
+  /* ═══════════════════════════════════════════════════════
+     CSV 파서 (app.js와 동일)
+  ═══════════════════════════════════════════════════════ */
+  function parseCSV(csvText) {
+    const chars = csvText.split('');
+    const lines = [];
+    let currentLine = [], current = '', inQuotes = false;
+
+    for (let i = 0; i < chars.length; i++) {
+      const ch = chars[i];
+      if (ch === '"') {
+        if (inQuotes && chars[i + 1] === '"') { current += '"'; i++; }
+        else inQuotes = !inQuotes;
+      } else if (ch === ',' && !inQuotes) {
+        currentLine.push(current.trim()); current = '';
+      } else if ((ch === '\n' || ch === '\r') && !inQuotes) {
+        if (ch === '\r' && chars[i + 1] === '\n') i++;
+        currentLine.push(current.trim());
+        lines.push(currentLine); currentLine = []; current = '';
+      } else { current += ch; }
+    }
+    if (current || currentLine.length > 0) {
+      currentLine.push(current.trim()); lines.push(currentLine);
+    }
+    if (lines.length < 2) return [];
+
+    const headers = lines[0].map(h => h.toLowerCase().trim());
+    const rows = [];
+    for (let r = 1; r < lines.length; r++) {
+      const row = lines[r];
+      if (row.every(c => c === '')) continue;
+      const obj = {};
+      headers.forEach((h, i) => { obj[h] = row[i] ?? ''; });
+      rows.push(obj);
+    }
+    return rows;
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     QR코드 카드 생성
+  ═══════════════════════════════════════════════════════ */
+
+  /**
+   * 단일 스토리 카드 + QR코드를 생성하여 DOM에 추가한다.
+   * @param {Object} story - 시트 행 데이터
+   * @param {string} baseUrl - 웹앱 배포 URL
+   * @param {number} index - 애니메이션 딜레이용
+   */
+  function createStoryCard(story, baseUrl, index) {
+    const storyUrl = `${baseUrl.replace(/\/$/, '')}/?id=${encodeURIComponent(story['id'])}`;
+
+    const card = document.createElement('div');
+    card.className = 'card bg-warm-800 rounded-2xl border border-warm-700/50 shadow-xl overflow-hidden';
+    card.style.animationDelay = `${index * 80}ms`;
+
+    card.innerHTML = `
+      <!-- 커버 이미지 (있을 때만) -->
+      ${story['imageurl'] || story['imageUrl']
+        ? `<div class="w-full h-32 overflow-hidden">
+             <img src="${story['imageurl'] || story['imageUrl']}"
+                  alt="${story['title']}"
+                  class="w-full h-full object-cover opacity-80"
+                  onerror="this.parentElement.style.display='none'" />
+           </div>`
+        : ''}
+
+      <div class="p-4">
+        <!-- 제목 & 설명 -->
+        <p class="text-sepia-500 text-xs font-mono mb-1 truncate">ID: ${story['id']}</p>
+        <h2 class="text-sepia-100 font-serif text-base font-bold leading-snug mb-1 line-clamp-2">${story['title'] || '(제목 없음)'}</h2>
+        ${story['description']
+          ? `<p class="text-sepia-500 text-xs leading-relaxed line-clamp-2 mb-3">${story['description']}</p>`
+          : '<div class="mb-3"></div>'}
+
+        <!-- QR코드 영역 -->
+        <div class="flex flex-col items-center gap-3 py-3 border-t border-warm-700/40">
+          <!-- QR코드 컨테이너 -->
+          <div class="qr-box bg-white rounded-xl p-2 shadow-lg" id="qr-${story['id']}"></div>
+
+          <!-- URL 표시 -->
+          <p class="text-sepia-600 text-xs text-center break-all px-1 select-all">${storyUrl}</p>
+
+          <!-- 다운로드 버튼들 -->
+          <div class="flex gap-2 w-full">
+            <button
+              onclick="downloadQR('${story['id']}', '${story['title']?.replace(/'/g, "\\'")}')"
+              class="dl-btn flex-1 py-2 text-xs font-semibold text-sepia-300 border border-sepia-700/50 rounded-lg transition-colors flex items-center justify-center gap-1.5"
+            >
+              <i class="fa-solid fa-download text-xs"></i> PNG 저장
+            </button>
+            <button
+              onclick="copyUrl('${storyUrl}', this)"
+              class="dl-btn flex-1 py-2 text-xs font-semibold text-sepia-300 border border-sepia-700/50 rounded-lg transition-colors flex items-center justify-center gap-1.5"
+            >
+              <i class="fa-solid fa-copy text-xs"></i> URL 복사
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('cards-grid').appendChild(card);
+
+    // QR코드 생성 (QRCode.js)
+    const qrUrl = storyUrl;
+    new QRCode(document.getElementById(`qr-${story['id']}`), {
+      text:         qrUrl,
+      width:        180,
+      height:       180,
+      colorDark:    '#1a140c',
+      colorLight:   '#ffffff',
+      correctLevel: QRCode.CorrectLevel.H,
+    });
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     QR PNG 다운로드
+  ═══════════════════════════════════════════════════════ */
+  function downloadQR(storyId, title) {
+    const qrBox = document.getElementById(`qr-${storyId}`);
+    // QRCode.js는 canvas 또는 img를 생성함
+    const canvas = qrBox.querySelector('canvas');
+    const img    = qrBox.querySelector('img');
+
+    const a = document.createElement('a');
+    a.download = `QR_${storyId}_${(title || storyId).replace(/\s+/g, '_')}.png`;
+
+    if (canvas) {
+      a.href = canvas.toDataURL('image/png');
+    } else if (img) {
+      a.href = img.src;
+    } else {
+      alert('QR코드 이미지를 찾을 수 없습니다.');
+      return;
+    }
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     URL 클립보드 복사
+  ═══════════════════════════════════════════════════════ */
+  async function copyUrl(url, btn) {
+    try {
+      await navigator.clipboard.writeText(url);
+      const original = btn.innerHTML;
+      btn.innerHTML = '<i class="fa-solid fa-check text-green-400 text-xs"></i> 복사됨!';
+      setTimeout(() => { btn.innerHTML = original; }, 2000);
+    } catch (_) {
+      prompt('URL을 복사하세요:', url);
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════════
+     메인: 시트에서 스토리 목록 로드 후 카드 렌더링
+  ═══════════════════════════════════════════════════════ */
+  async function loadAllStories() {
+    const baseUrl = document.getElementById('base-url').value.trim() || window.location.origin;
+
+    // 이전 카드 초기화
+    document.getElementById('cards-grid').innerHTML = '';
+    document.getElementById('print-bar').classList.add('hidden');
+    document.getElementById('error-section').classList.add('hidden');
+    document.getElementById('empty-section').classList.add('hidden');
+    document.getElementById('loading-section').classList.remove('hidden');
+
+    try {
+      const res = await fetch(SHEET_CSV_URL, { cache: 'no-cache' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const csvText = await res.text();
+      const rows    = parseCSV(csvText);
+
+      document.getElementById('loading-section').classList.add('hidden');
+
+      if (rows.length === 0) {
+        document.getElementById('empty-section').classList.remove('hidden');
+        return;
+      }
+
+      // 각 스토리 카드 생성
+      rows.forEach((row, i) => createStoryCard(row, baseUrl, i));
+      document.getElementById('print-bar').classList.remove('hidden');
+
+    } catch (err) {
+      document.getElementById('loading-section').classList.add('hidden');
+      document.getElementById('error-section').classList.remove('hidden');
+      document.getElementById('error-msg').textContent = err.message;
+      console.error('[Admin] 로드 실패:', err);
+    }
+  }
+
+  // 페이지 로드 시 자동으로 현재 origin으로 시작
+  window.addEventListener('DOMContentLoaded', () => {
+    const input = document.getElementById('base-url');
+    if (!input.value) {
+      input.value = window.location.origin;
+    }
+    loadAllStories();
+  });
+  </script>
+
+  <style>
+    @media print {
+      header, #print-bar, #refresh-btn, .dl-btn { display: none !important; }
+      body { background: white; }
+      .card { border: 1px solid #ccc; break-inside: avoid; }
+      #cards-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+  </style>
+</body>
+</html>
