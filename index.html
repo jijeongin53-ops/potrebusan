@@ -239,6 +239,46 @@
   </div>
 
   <!-- ═══════════════════════════════════════════════
+       SECTION 3.5: 패스워드 입력 화면 (NEW)
+  ══════════════════════════════════════════════════ -->
+  <div id="password-screen" class="hidden flex-1 flex flex-col items-center justify-center px-6 gap-8 text-center fade-in">
+    <div class="relative">
+      <div class="w-20 h-20 rounded-full bg-sepia-300 flex items-center justify-center shadow-[0_0_30px_rgba(212,168,85,0.4)]">
+        <i class="fa-solid fa-lock text-warm-900 text-3xl"></i>
+      </div>
+      <div class="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-warm-800 border-4 border-warm-900 flex items-center justify-center">
+        <i class="fa-solid fa-key text-sepia-400 text-[10px]"></i>
+      </div>
+    </div>
+    
+    <div class="max-w-[280px]">
+      <h2 class="text-sepia-100 font-serif text-2xl font-bold mb-2" id="password-title">Private Story</h2>
+      <p class="text-sepia-400 text-sm leading-relaxed" id="password-desc">This audio story is protected.<br/>Please enter the password to listen.</p>
+    </div>
+
+    <form id="password-form" class="w-full max-w-[280px] flex flex-col gap-4">
+      <div class="relative">
+        <input 
+          type="password" 
+          id="password-input" 
+          placeholder="••••"
+          required
+          class="w-full bg-warm-800/50 border-2 border-warm-700 rounded-2xl px-6 py-4 text-center text-sepia-100 text-2xl tracking-[0.5em] focus:border-sepia-400 outline-none transition-all placeholder:text-warm-600"
+        />
+      </div>
+      <button 
+        type="submit"
+        class="w-full py-4 bg-sepia-300 hover:bg-sepia-200 text-warm-900 font-bold rounded-2xl shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+        id="password-submit-btn"
+      >
+        <span>Unlock Story</span>
+        <i class="fa-solid fa-chevron-right text-xs"></i>
+      </button>
+      <p id="password-error" class="hidden text-red-400 text-sm font-medium animate-bounce mt-2">Incorrect password. Please try again.</p>
+    </form>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════
        SECTION 4: 메인 콘텐츠 (API 로드 후 표시)
   ══════════════════════════════════════════════════ -->
   <main id="main-content" class="hidden flex-1 flex flex-col px-4 pb-4 pt-2 gap-5 relative z-10 overflow-y-auto fade-in" style="padding-bottom: 220px;">

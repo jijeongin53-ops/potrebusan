@@ -147,6 +147,16 @@ function updateI18nUI() {
 
   const dlLabel = document.getElementById('download-label');
   if (dlLabel) dlLabel.textContent = t('save');
+
+  const pwTitle = document.getElementById('password-title');
+  const pwDesc  = document.getElementById('password-desc');
+  const pwBtn   = document.getElementById('password-submit-btn')?.querySelector('span');
+  const pwErr   = document.getElementById('password-error');
+
+  if (pwTitle) pwTitle.textContent = t('passwordTitle');
+  if (pwDesc)  pwDesc.textContent  = t('passwordDesc');
+  if (pwBtn)   pwBtn.textContent   = t('passwordBtn');
+  if (pwErr)   pwErr.textContent   = t('passwordError');
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -269,6 +279,7 @@ async function fetchStoryData(storyId) {
         description: found['description'] || '',
         imageUrl:    found['imageurl']    || found['imageUrl'] || '',
         audioUrl:    found['audiourl']    || found['audioUrl'] || '',
+        password:    found['password']    || '',
       },
     };
   }
@@ -282,6 +293,23 @@ async function fetchStoryData(storyId) {
 
   // 어디에도 없으면 에러
   throw new Error(`[Sheet] id='${storyId}'에 해당하는 스토리가 없습니다.`);
+}
+
+/**
+ * 구글 드라이브 공유 링크를 직접 재생/다운로드 가능한 URL로 변환한다.
+ * @param {string} url - 원본 URL
+ * @returns {string} 변환된 URL
+ */
+function convertDriveLink(url) {
+  if (!url) return '';
+  if (url.includes('drive.google.com')) {
+    // /file/d/ID/... 패턴에서 ID 추출
+    const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (match && match[1]) {
+      return `https://drive.google.com/uc?export=download&id=${match[1]}`;
+    }
+  }
+  return url;
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -315,6 +343,25 @@ function showError(titleKey, descKey) {
   document.getElementById('error-desc').textContent  = t(descKey  || 'errorDesc');
 }
 
+/** 패스워드 화면 표시 */
+function showPasswordScreen() {
+  document.getElementById('loading-screen').classList.add('hidden');
+  document.getElementById('loading-screen').classList.remove('flex');
+  document.getElementById('password-screen').classList.remove('hidden');
+  document.getElementById('password-screen').classList.add('flex');
+  document.getElementById('main-content').classList.add('hidden');
+  document.getElementById('player-footer').classList.add('hidden');
+  
+  // 입력창에 포커스
+  document.getElementById('password-input').focus();
+}
+
+/** 패스워드 화면 숨김 */
+function hidePasswordScreen() {
+  document.getElementById('password-screen').classList.add('hidden');
+  document.getElementById('password-screen').classList.remove('flex');
+}
+
 /** 메인 콘텐츠 + 플레이어 표시 */
 function showContent() {
   document.getElementById('loading-screen').classList.add('hidden');
@@ -343,10 +390,11 @@ function renderStoryContent(data) {
   };
 
   const audioPlayer = document.getElementById('audio-player');
-  audioPlayer.src = data.audioUrl || '';
+  const finalAudioUrl = convertDriveLink(data.audioUrl);
+  audioPlayer.src = finalAudioUrl;
 
   // 다운로드 버튼에 URL과 파일명 저장
-  document.getElementById('download-btn').dataset.url      = data.audioUrl || '';
+  document.getElementById('download-btn').dataset.url      = finalAudioUrl;
   document.getElementById('download-btn').dataset.filename = `${data.id || 'busan-story'}.mp3`;
 
   document.title = `${data.title} — Busan Audio Stories`;
@@ -620,9 +668,34 @@ async function initApp() {
     const response = await fetchStoryData(storyId);
     const data     = response.data;
 
-    renderStoryContent(data);
-    setupMediaSession(data);
-    showContent();
+    // 패스워드 로직 추가
+    if (data.password) {
+      showPasswordScreen();
+      // 패스워드 제출 이벤트 바인딩
+      const form = document.getElementById('password-form');
+      form.onsubmit = (e) => {
+        e.preventDefault();
+        const input = document.getElementById('password-input').value;
+        const errorEl = document.getElementById('password-error');
+
+        if (input === data.password) {
+          hidePasswordScreen();
+          renderStoryContent(data);
+          setupMediaSession(data);
+          showContent();
+          console.info('[App] 패스워드 일치, 콘텐츠 로드');
+        } else {
+          errorEl.classList.remove('hidden');
+          // 애니메이션 효과를 위해 흔들기 (Tailwind animate-bounce 활용)
+          setTimeout(() => errorEl.classList.add('hidden'), 2000);
+        }
+      };
+    } else {
+      // 패스워드 없으면 바로 렌더링
+      renderStoryContent(data);
+      setupMediaSession(data);
+      showContent();
+    }
 
     console.info('[App] 스토리 로드 완료:', data.title);
 
