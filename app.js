@@ -227,11 +227,15 @@ function renderStoryContent(data) {
   document.getElementById('story-title').textContent = data.title;
   document.getElementById('story-description').textContent = data.description;
   const coverImg = document.getElementById('cover-image');
-  coverImg.src = data.imageUrl;
+  coverImg.src = convertDriveLink(data.imageUrl); // 이미지도 구글 드라이브 호환 변환
   
   const finalAudioUrl = convertDriveLink(data.audioUrl);
   document.getElementById('audio-player').src = finalAudioUrl;
-  document.getElementById('download-btn').dataset.url = finalAudioUrl;
+  
+  // 다운로드 버튼에 필요한 정보 저장
+  const downloadBtn = document.getElementById('download-btn');
+  downloadBtn.dataset.url = finalAudioUrl;
+  downloadBtn.dataset.filename = (data.title || 'busan-story') + '.mp3';
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -273,6 +277,21 @@ function initPlayer() {
   };
 
   document.getElementById('forward-btn').onclick = () => audio.currentTime += 15;
+
+  // 다운로드 버튼 로직: 새 창으로 즉시 열어서 다운로드 (CORS 이슈 우회)
+  const downloadBtn = document.getElementById('download-btn');
+  downloadBtn.onclick = () => {
+    const url = downloadBtn.dataset.url;
+    if (url) {
+      // 구글 드라이브 링크는 새 창(새 탭)으로 열면 즉시 강제 다운로드가 시작됩니다.
+      window.open(url, '_blank');
+      
+      // UI 업데이트
+      const label = document.getElementById('download-label');
+      label.textContent = t('saveSuccess') || 'Saved!';
+      setTimeout(() => label.textContent = t('save') || 'Save', 3000);
+    }
+  };
 }
 
 /* ──────────────────────────────────────────────────────────────
