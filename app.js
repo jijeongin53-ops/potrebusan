@@ -4,19 +4,6 @@
  * ║   외국인 관광객을 위한 QR 오디오북 팟캐스트 웹앱               ║
  * ║   작성: Antigravity (Senior FE Dev)                          ║
  * ╚══════════════════════════════════════════════════════════════╝
- *
- * 주요 모듈:
- *   1. 다국어(i18n) 사전 및 언어 전환 로직
- *   2. 구글 시트 CSV 직접 읽기 (GAS/백엔드 불필요)
- *   3. HTML5 Audio 재생 컨트롤 (play/pause/seek/skip)
- *   4. Media Session API (잠금화면 컨트롤)
- *   5. 오프라인 다운로드 기능
- *   6. UI 업데이트 헬퍼 함수
- *
- * 접근 제어:
- *   - URL에 ?id= 파라미터가 없으면 QR코드 안내 화면 표시
- *   - ?id= 값이 시트에 없으면 "스토리를 찾을 수 없음" 에러 표시
- *   - 즉, 유효한 QR코드 없이는 어떤 콘텐츠도 재생·다운로드 불가
  */
 
 'use strict';
@@ -25,55 +12,26 @@
    0. 전역 설정 상수
 ────────────────────────────────────────────────────────────── */
 
-/**
- * 구글 시트 정보.
- *
- * SHEET_ID  : 스프레드시트 URL의 /d/ 뒤에 오는 긴 문자열
- * SHEET_GID : 하단 탭의 gid 값 (URL의 #gid= 뒤 숫자)
- *
- * ⚠️ 시트 1행(헤더): id | title | description | imageUrl | audioUrl
- * ⚠️ 시트는 「링크가 있는 모든 사용자 - 뷰어」로 공유되어야 함
- */
 const SHEET_ID  = '1bUHqT4Rmg4nQ9jsBUYM_Ef9CrUfgZEHAXBk0Gj2LCRY';
-const SHEET_GID = '1030888258'; // 「오디오 파일 저장소」 탭
+const SHEET_GID = '0'; // 「오디오 파일 저장소」 탭 (첫 번째 탭)
 
 /** 구글 시트 공개 CSV 다운로드 URL */
 const SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${SHEET_GID}`;
 
-/**
- * 개발·UI 확인용 데모 데이터.
- * 시트에 동일한 id가 없을 때만 폴백으로 사용된다.
- * 실제 운영 시에는 시트 데이터가 항상 우선한다.
- */
 const DEMO_FALLBACK = [
   {
     id:          'book01',
     title:       'The Memory of Bosu-dong',
-    description: "A 30-minute immersive audio journey through Busan's legendary book alley at Bosu-dong. Discover how this street emerged from the ruins of the Korean War, becoming a sanctuary of knowledge and second-hand stories for the people of Busan.",
+    description: "A 30-minute immersive audio journey through Busan's legendary book alley at Bosu-dong.",
     imageUrl:    'https://images.unsplash.com/photo-1481627834876-b7833e8f5570?w=800&q=80',
     audioUrl:    'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3',
-  },
-  {
-    id:          'book02',
-    title:       'Gamcheon: The Santorini of Busan',
-    description: 'Explore the rainbow-colored hillside village of Gamcheon, where narrow alleys wind between pastel houses and hidden murals tell the stories of generations.',
-    imageUrl:    'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=800&q=80',
-    audioUrl:    'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-2.mp3',
-  },
-  {
-    id:          'book03',
-    title:       'Jagalchi: Voice of the Sea',
-    description: "At Korea's largest fish market, the voices of the haenyeo echo through decades of maritime tradition. Listen to the living history of Jagalchi.",
-    imageUrl:    'https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800&q=80',
-    audioUrl:    'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-3.mp3',
-  },
+  }
 ];
 
 /* ──────────────────────────────────────────────────────────────
    1. 다국어(i18n) 사전 및 언어 전환
 ────────────────────────────────────────────────────────────── */
 
-/** 지원 언어: EN / KO / JA */
 const I18N = {
   en: {
     loading:       'Loading story...',
@@ -85,6 +43,10 @@ const I18N = {
     tryAgain:      'Try Again',
     idMissing:     'Please Scan a QR Code',
     idMissingDesc: 'This page is accessed by scanning a QR code at a Busan location. No direct access is available.',
+    passwordTitle: 'Private Story',
+    passwordDesc:  'This audio story is protected. Please enter the password to listen.',
+    passwordBtn:   'Unlock Story',
+    passwordError: 'Incorrect password. Please try again.',
   },
   ko: {
     loading:       '이야기를 불러오는 중...',
@@ -96,6 +58,10 @@ const I18N = {
     tryAgain:      '다시 시도',
     idMissing:     'QR코드를 스캔해 주세요',
     idMissingDesc: '이 페이지는 부산의 현장에 설치된 QR코드를 스캔하여 접속합니다.\n직접 접속은 지원하지 않습니다.',
+    passwordTitle: '보안 스토리',
+    passwordDesc:  '이 콘텐츠는 비밀번호로 보호되어 있습니다. 비밀번호를 입력해 주세요.',
+    passwordBtn:   '잠금 해제',
+    passwordError: '비밀번호가 틀렸습니다. 다시 시도해 주세요.',
   },
   ja: {
     loading:       'ストーリーを読み込み中...',
@@ -106,19 +72,17 @@ const I18N = {
     saveSuccess:   '保存済み',
     tryAgain:      '再試行',
     idMissing:     'QRコードをスキャンしてください',
-    idMissingDesc: 'このページは釜山の現地に設置されたQRコードをスキャンしてアクセスします。\n直接アクセスはできません。',
+    idMissingDesc: 'このページは釜山の現地に設置されたQRコードをスキャンしてアクセスします。',
+    passwordTitle: 'プライベートストーリー',
+    passwordDesc:  '保護されたストーリーです。パスワードを入力してください。',
+    passwordBtn:   'ロック解除',
+    passwordError: 'パスワードが違います。',
   },
 };
 
-/** 현재 활성 언어 (기본값: 영어) */
 let currentLang = 'en';
-
-/** 현재 언어의 번역 텍스트를 반환하는 헬퍼 */
 const t = (key) => I18N[currentLang]?.[key] ?? I18N['en'][key];
 
-/**
- * 언어 전환 버튼 초기화.
- */
 function initLangSwitcher() {
   const buttons = document.querySelectorAll('.lang-btn');
   buttons.forEach(btn => {
@@ -133,9 +97,6 @@ function initLangSwitcher() {
   });
 }
 
-/**
- * 언어 변경 시 UI 텍스트를 업데이트한다.
- */
 function updateI18nUI() {
   const loadingText = document.getElementById('loading-text');
   if (loadingText) loadingText.textContent = t('loading');
@@ -149,84 +110,47 @@ function updateI18nUI() {
   if (dlLabel) dlLabel.textContent = t('save');
 
   const pwTitle = document.getElementById('password-title');
+  // I18N 객체에 passwordDesc 등 누락된 텍스트가 있을 수 있으므로 기본값 추가
   const pwDesc  = document.getElementById('password-desc');
   const pwBtn   = document.getElementById('password-submit-btn')?.querySelector('span');
   const pwErr   = document.getElementById('password-error');
 
-  if (pwTitle) pwTitle.textContent = t('passwordTitle');
-  if (pwDesc)  pwDesc.textContent  = t('passwordDesc');
-  if (pwBtn)   pwBtn.textContent   = t('passwordBtn');
-  if (pwErr)   pwErr.textContent   = t('passwordError');
+  if (pwTitle) pwTitle.textContent = t('passwordTitle') || 'Private Story';
+  if (pwDesc)  pwDesc.textContent  = t('passwordDesc') || 'Please enter the password.';
+  if (pwBtn)   pwBtn.textContent   = t('passwordBtn') || 'Unlock';
+  if (pwErr)   pwErr.textContent   = t('passwordError') || 'Incorrect password.';
 }
 
-/* ──────────────────────────────────────────────────────────────
-   2. URL 파라미터 파싱
-────────────────────────────────────────────────────────────── */
-
-/**
- * URL의 QueryString에서 'id' 파라미터를 읽어 반환한다.
- * 예: ?id=book01 → 'book01'
- * @returns {string|null}
- */
-function getStoryIdFromURL() {
-  const params = new URLSearchParams(window.location.search);
-  return params.get('id');
-}
+// URL 파라미터 파싱 제거 (이제 사용하지 않음)
 
 /* ──────────────────────────────────────────────────────────────
    3. 구글 시트 CSV 파싱 및 데이터 조회
 ────────────────────────────────────────────────────────────── */
 
-/**
- * CSV 문자열을 객체 배열로 파싱한다.
- * - 1행 = 헤더(컬럼명)
- * - 2행~ = 데이터
- * - 큰따옴표로 감싼 셀(쉼표·줄바꿈 포함) 처리 지원
- *
- * @param {string} csvText - 구글 시트에서 받은 CSV 원문
- * @returns {Array<Object>} 헤더를 키로 한 객체 배열
- */
 function parseCSV(csvText) {
   const chars = csvText.split('');
   const lines = [];
-  let currentLine = [];
-  let current = '';
-  let inQuotes = false;
+  let currentLine = [], current = '', inQuotes = false;
 
   for (let i = 0; i < chars.length; i++) {
     const ch = chars[i];
-
     if (ch === '"') {
-      // 연속 큰따옴표 ("") = 이스케이프된 큰따옴표
-      if (inQuotes && chars[i + 1] === '"') {
-        current += '"';
-        i++;
-      } else {
-        inQuotes = !inQuotes;
-      }
+      if (inQuotes && chars[i + 1] === '"') { current += '"'; i++; }
+      else inQuotes = !inQuotes;
     } else if (ch === ',' && !inQuotes) {
-      currentLine.push(current.trim());
-      current = '';
+      currentLine.push(current.trim()); current = '';
     } else if ((ch === '\n' || ch === '\r') && !inQuotes) {
       if (ch === '\r' && chars[i + 1] === '\n') i++;
       currentLine.push(current.trim());
-      lines.push(currentLine);
-      currentLine = [];
-      current = '';
-    } else {
-      current += ch;
-    }
+      lines.push(currentLine); currentLine = []; current = '';
+    } else { current += ch; }
   }
-  // 마지막 셀/행 처리
   if (current || currentLine.length > 0) {
-    currentLine.push(current.trim());
-    lines.push(currentLine);
+    currentLine.push(current.trim()); lines.push(currentLine);
   }
-
   if (lines.length < 2) return [];
 
   const headers = lines[0].map(h => h.toLowerCase().trim());
-
   const rows = [];
   for (let r = 1; r < lines.length; r++) {
     const row = lines[r];
@@ -235,477 +159,189 @@ function parseCSV(csvText) {
     headers.forEach((h, i) => { obj[h] = row[i] ?? ''; });
     rows.push(obj);
   }
-
   return rows;
 }
 
-/**
- * 구글 시트에서 CSV를 fetch하여 storyId에 해당하는 스토리를 반환한다.
- *
- * 접근 제어 규칙:
- *   - storyId는 반드시 존재해야 함 (없으면 이 함수 호출 전에 차단됨)
- *   - 시트에 해당 id가 있으면 시트 데이터 반환
- *   - 시트에 없으면 DEMO_FALLBACK에서 검색 (개발용)
- *   - 어디에도 없으면 에러 throw → "스토리 없음" UI 표시
- *
- * @param {string} storyId - URL ?id= 값 (반드시 유효한 문자열)
- * @returns {Promise<Object>} { status: 'success', data: {...} }
- */
-async function fetchStoryData(storyId) {
-  console.info('[Sheet] 구글 시트 CSV 로드 시작:', SHEET_CSV_URL);
+// 기존 fetchStoryData 통신 방식 대체
+// 비밀번호를 기반으로 전체 데이터를 로드하기 위한 전역 캐시
+let allRowsCache = [];
 
-  const response = await fetch(SHEET_CSV_URL, { cache: 'no-cache' });
-
-  if (!response.ok) {
-    throw new Error(`[Sheet] CSV fetch 실패: HTTP ${response.status}. 시트 공유 설정을 확인하세요.`);
+async function preloadCSV() {
+  try {
+    console.info('[Sheet] Fetching CSV:', SHEET_CSV_URL);
+    const response = await fetch(SHEET_CSV_URL, { cache: 'no-cache' });
+    if (response.ok) {
+      const csvText = await response.text();
+      allRowsCache = parseCSV(csvText);
+      console.info('[Sheet] Loaded rows:', allRowsCache.length);
+    }
+  } catch (err) {
+    console.error('[Sheet] Fetch Error:', err);
   }
-
-  const csvText = await response.text();
-  const allRows = parseCSV(csvText);
-  console.info(`[Sheet] 파싱된 행 수: ${allRows.length}`);
-
-  // 시트에서 id 검색
-  const found = allRows.find(row =>
-    (row['id'] || '').toLowerCase() === storyId.toLowerCase()
-  );
-
-  if (found) {
-    console.info('[Sheet] 스토리 데이터 로드 성공:', found['title']);
-    return {
-      status: 'success',
-      data: {
-        id:          found['id']          || storyId,
-        title:       found['title']       || '제목 없음',
-        description: found['description'] || '',
-        imageUrl:    found['imageurl']    || found['imageUrl'] || '',
-        audioUrl:    found['audiourl']    || found['audioUrl'] || '',
-        password:    found['password']    || '',
-      },
-    };
-  }
-
-  // 시트에 없으면 데모 폴백에서 검색 (개발·테스트용)
-  const demo = DEMO_FALLBACK.find(r => r.id?.toLowerCase() === storyId.toLowerCase());
-  if (demo) {
-    console.warn(`[Sheet] 시트에 id='${storyId}' 없음 → 데모 데이터 사용`);
-    return { status: 'success', data: { ...demo } };
-  }
-
-  // 어디에도 없으면 에러
-  throw new Error(`[Sheet] id='${storyId}'에 해당하는 스토리가 없습니다.`);
 }
 
-/**
- * 구글 드라이브 공유 링크를 직접 재생/다운로드 가능한 URL로 변환한다.
- * @param {string} url - 원본 URL
- * @returns {string} 변환된 URL
- */
 function convertDriveLink(url) {
-  if (!url) return '';
-  if (url.includes('drive.google.com')) {
-    // /file/d/ID/... 패턴에서 ID 추출
-    const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-    if (match && match[1]) {
-      return `https://drive.google.com/uc?export=download&id=${match[1]}`;
-    }
-  }
-  return url;
+  if (!url || !url.includes('drive.google.com')) return url;
+  const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  return match && match[1] ? `https://drive.google.com/uc?export=download&id=${match[1]}` : url;
 }
 
 /* ──────────────────────────────────────────────────────────────
-   4. UI 렌더링 헬퍼
+   4. UI 제어
 ────────────────────────────────────────────────────────────── */
 
-/** 로딩 화면 표시 */
 function showLoading() {
-  document.getElementById('loading-screen').classList.remove('hidden');
-  document.getElementById('loading-screen').classList.add('flex');
-  document.getElementById('error-screen').classList.add('hidden');
-  document.getElementById('error-screen').classList.remove('flex');
-  document.getElementById('main-content').classList.add('hidden');
-  document.getElementById('player-footer').classList.add('hidden');
+  document.getElementById('loading-screen').className = 'flex-1 flex flex-col items-center justify-center';
+  document.getElementById('error-screen').className = 'hidden';
+  document.getElementById('password-screen').className = 'hidden';
+  document.getElementById('main-content').className = 'hidden';
+  document.getElementById('player-footer').className = 'hidden';
 }
 
-/**
- * 에러 화면 표시
- * @param {string} titleKey - I18N 키
- * @param {string} descKey  - I18N 키
- */
 function showError(titleKey, descKey) {
-  document.getElementById('loading-screen').classList.add('hidden');
-  document.getElementById('loading-screen').classList.remove('flex');
-  document.getElementById('error-screen').classList.remove('hidden');
-  document.getElementById('error-screen').classList.add('flex');
-  document.getElementById('main-content').classList.add('hidden');
-  document.getElementById('player-footer').classList.add('hidden');
-
-  document.getElementById('error-title').textContent = t(titleKey || 'errorTitle');
-  document.getElementById('error-desc').textContent  = t(descKey  || 'errorDesc');
+  document.getElementById('loading-screen').className = 'hidden';
+  document.getElementById('error-screen').className = 'flex-1 flex flex-col items-center justify-center px-6 gap-5';
+  document.getElementById('error-title').textContent = t(titleKey);
+  document.getElementById('error-desc').textContent = t(descKey);
 }
 
-/** 패스워드 화면 표시 */
 function showPasswordScreen() {
-  document.getElementById('loading-screen').classList.add('hidden');
-  document.getElementById('loading-screen').classList.remove('flex');
-  document.getElementById('password-screen').classList.remove('hidden');
-  document.getElementById('password-screen').classList.add('flex');
-  document.getElementById('main-content').classList.add('hidden');
-  document.getElementById('player-footer').classList.add('hidden');
-  
-  // 입력창에 포커스
+  document.getElementById('loading-screen').className = 'hidden';
+  document.getElementById('password-screen').className = 'flex-1 flex flex-col items-center justify-center px-6 gap-8 text-center fade-in';
+  document.getElementById('password-input').value = '';
   document.getElementById('password-input').focus();
 }
 
-/** 패스워드 화면 숨김 */
 function hidePasswordScreen() {
-  document.getElementById('password-screen').classList.add('hidden');
-  document.getElementById('password-screen').classList.remove('flex');
+  document.getElementById('password-screen').className = 'hidden';
 }
 
-/** 메인 콘텐츠 + 플레이어 표시 */
 function showContent() {
-  document.getElementById('loading-screen').classList.add('hidden');
-  document.getElementById('loading-screen').classList.remove('flex');
-  document.getElementById('error-screen').classList.add('hidden');
-  document.getElementById('error-screen').classList.remove('flex');
-  document.getElementById('main-content').classList.remove('hidden');
-  document.getElementById('main-content').classList.add('flex');
-  document.getElementById('player-footer').classList.remove('hidden');
+  document.getElementById('loading-screen').className = 'hidden';
+  document.getElementById('password-screen').className = 'hidden';
+  document.getElementById('main-content').className = 'flex-1 flex flex-col px-4 pb-4 fade-in';
+  document.getElementById('player-footer').className = 'fixed bottom-0 left-0 right-0 z-30';
 }
 
-/**
- * 스토리 데이터로 콘텐츠 영역을 채운다.
- * @param {Object} data - fetched story data
- */
 function renderStoryContent(data) {
-  document.getElementById('story-title').textContent = data.title || 'Untitled Story';
-  document.getElementById('story-description').textContent = data.description || '';
-
+  document.getElementById('story-title').textContent = data.title;
+  document.getElementById('story-description').textContent = data.description;
   const coverImg = document.getElementById('cover-image');
-  coverImg.src = data.imageUrl || '';
-  coverImg.alt = `Cover: ${data.title}`;
-  coverImg.onerror = () => {
-    coverImg.style.display = 'none';
-    coverImg.parentElement.style.background = 'linear-gradient(135deg, #3e2b0e 0%, #1a1008 100%)';
-  };
-
-  const audioPlayer = document.getElementById('audio-player');
+  coverImg.src = data.imageUrl;
+  
   const finalAudioUrl = convertDriveLink(data.audioUrl);
-  audioPlayer.src = finalAudioUrl;
-
-  // 다운로드 버튼에 URL과 파일명 저장
-  document.getElementById('download-btn').dataset.url      = finalAudioUrl;
-  document.getElementById('download-btn').dataset.filename = `${data.id || 'busan-story'}.mp3`;
-
-  document.title = `${data.title} — Busan Audio Stories`;
+  document.getElementById('audio-player').src = finalAudioUrl;
+  document.getElementById('download-btn').dataset.url = finalAudioUrl;
 }
 
 /* ──────────────────────────────────────────────────────────────
-   5. 시간 포맷 유틸리티
+   5. 플레이어 로직
 ────────────────────────────────────────────────────────────── */
 
-/**
- * 초를 'M:SS' 형식으로 변환한다.
- * @param {number} seconds
- * @returns {string}
- */
-function formatTime(seconds) {
-  if (isNaN(seconds) || !isFinite(seconds)) return '0:00';
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, '0')}`;
+const audio = document.getElementById('audio-player');
+const progressBar = document.getElementById('progress-bar');
+
+function formatTime(s) {
+  if (isNaN(s)) return '0:00';
+  const m = Math.floor(s / 60);
+  const ss = Math.floor(s % 60).toString().padStart(2, '0');
+  return `${m}:${ss}`;
 }
 
-/* ──────────────────────────────────────────────────────────────
-   6. 오디오 플레이어 컨트롤
-────────────────────────────────────────────────────────────── */
-
-const audio          = document.getElementById('audio-player');
-const playPauseBtn   = document.getElementById('play-pause-btn');
-const playIcon       = document.getElementById('play-icon');
-const progressBar    = document.getElementById('progress-bar');
-const currentTimeEl  = document.getElementById('current-time');
-const totalTimeEl    = document.getElementById('total-time');
-const downloadBtn    = document.getElementById('download-btn');
-const waveVisualizer = document.getElementById('wave-visualizer');
-
-let isPlaying = false;
-
-/**
- * 재생/일시정지 UI 상태를 동기화한다.
- */
-function syncPlayUI(playing) {
-  isPlaying = playing;
-
-  if (playing) {
-    playIcon.classList.replace('fa-play', 'fa-pause');
-    playIcon.classList.remove('ml-1');
-    playPauseBtn.classList.add('playing-pulse');
-    waveVisualizer.classList.remove('hidden');
-    waveVisualizer.querySelectorAll('.wave-bar').forEach(b => b.classList.remove('paused'));
-  } else {
-    playIcon.classList.replace('fa-pause', 'fa-play');
-    playIcon.classList.add('ml-1');
-    playPauseBtn.classList.remove('playing-pulse');
-    waveVisualizer.querySelectorAll('.wave-bar').forEach(b => b.classList.add('paused'));
-  }
-}
-
-/**
- * 오디오 플레이어 이벤트 바인딩.
- */
 function initPlayer() {
-  /* 재생/일시정지 토글 */
-  playPauseBtn.addEventListener('click', () => {
-    if (audio.paused || audio.ended) {
-      audio.play().catch(err => console.error('[Audio] 재생 오류:', err));
-    } else {
-      audio.pause();
-    }
-  });
+  const playPauseBtn = document.getElementById('play-pause-btn');
+  const playIcon = document.getElementById('play-icon');
 
-  audio.addEventListener('play',  () => { syncPlayUI(true);  updateMediaSession(); });
-  audio.addEventListener('pause', () => { syncPlayUI(false); });
-
-  audio.addEventListener('ended', () => {
-    syncPlayUI(false);
-    audio.currentTime = 0;
-    progressBar.value = 0;
-    progressBar.style.setProperty('--progress', '0%');
-    currentTimeEl.textContent = '0:00';
-  });
-
-  audio.addEventListener('loadedmetadata', () => {
-    totalTimeEl.textContent = formatTime(audio.duration);
-  });
-
-  /* 진행률 바 업데이트 */
-  audio.addEventListener('timeupdate', () => {
-    if (isNaN(audio.duration) || audio.duration === 0) return;
+  playPauseBtn.onclick = () => audio.paused ? audio.play() : audio.pause();
+  
+  audio.onplay = () => playIcon.className = 'fa-solid fa-pause text-warm-900 text-xl';
+  audio.onpause = () => playIcon.className = 'fa-solid fa-play text-warm-900 text-xl ml-1';
+  
+  audio.ontimeupdate = () => {
     const pct = (audio.currentTime / audio.duration) * 100;
     progressBar.value = pct;
-    progressBar.style.setProperty('--progress', `${pct.toFixed(2)}%`);
-    currentTimeEl.textContent = formatTime(audio.currentTime);
-    updateMediaSessionPosition();
-  });
+    progressBar.style.setProperty('--progress', `${pct}%`);
+    document.getElementById('current-time').textContent = formatTime(audio.currentTime);
+  };
+  
+  audio.onloadedmetadata = () => {
+    document.getElementById('total-time').textContent = formatTime(audio.duration);
+  };
 
-  /* 슬라이더 탐색(Seek) */
-  progressBar.addEventListener('input', () => {
-    const pct = parseFloat(progressBar.value);
-    progressBar.style.setProperty('--progress', `${pct.toFixed(2)}%`);
-    currentTimeEl.textContent = formatTime((pct / 100) * audio.duration);
-  });
-  progressBar.addEventListener('change', () => {
-    if (!isNaN(audio.duration)) {
-      audio.currentTime = (parseFloat(progressBar.value) / 100) * audio.duration;
-    }
-  });
+  progressBar.oninput = () => {
+    audio.currentTime = (progressBar.value / 100) * audio.duration;
+  };
 
-  /* 15초 앞으로 */
-  document.getElementById('forward-btn').addEventListener('click', () => {
-    audio.currentTime = Math.min(audio.currentTime + 15, audio.duration || 0);
-  });
-
-  /* 다운로드 */
-  downloadBtn.addEventListener('click', handleDownload);
-
-  /* 오디오 에러 */
-  audio.addEventListener('error', () => {
-    totalTimeEl.textContent = 'Error';
-  });
+  document.getElementById('forward-btn').onclick = () => audio.currentTime += 15;
 }
 
 /* ──────────────────────────────────────────────────────────────
-   7. 오프라인 다운로드 (MP3 저장)
+   6. 초기화 (앱 메인 로직)
 ────────────────────────────────────────────────────────────── */
 
-/**
- * 현재 스토리의 오디오 파일을 사용자 기기에 저장한다.
- * QR코드로 접근한 해당 스토리의 파일만 다운로드된다.
- */
-async function handleDownload() {
-  const url      = downloadBtn.dataset.url;
-  const filename = downloadBtn.dataset.filename || 'busan-audio.mp3';
-  const label    = document.getElementById('download-label');
-
-  if (!url) return;
-
-  downloadBtn.disabled = true;
-  downloadBtn.querySelector('i').className = 'fa-solid fa-spinner text-sepia-300 text-sm spinner';
-  label.textContent = '...';
-
-  try {
-    // Blob으로 다운로드 → 로컬 저장
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-    const blob      = await res.blob();
-    const blobURL   = URL.createObjectURL(blob);
-    const a         = document.createElement('a');
-    a.href          = blobURL;
-    a.download      = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => URL.revokeObjectURL(blobURL), 10000);
-
-    downloadBtn.querySelector('i').className = 'fa-solid fa-check text-green-400 text-sm';
-    label.textContent = t('saveSuccess');
-
-  } catch (err) {
-    console.error('[Download] 다운로드 실패 — 직접 링크 방식으로 폴백:', err);
-    const a    = document.createElement('a');
-    a.href     = url;
-    a.download = filename;
-    a.target   = '_blank';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    downloadBtn.querySelector('i').className = 'fa-solid fa-download text-sepia-300 text-sm';
-    label.textContent = t('save');
-  } finally {
-    setTimeout(() => {
-      downloadBtn.disabled = false;
-      downloadBtn.querySelector('i').className = 'fa-solid fa-check text-green-400 text-sm';
-    }, 3000);
-  }
-}
-
-/* ──────────────────────────────────────────────────────────────
-   8. Media Session API — 잠금 화면 & 이어폰 컨트롤 연동
-────────────────────────────────────────────────────────────── */
-
-/**
- * 잠금 화면 및 이어폰 컨트롤을 위한 Media Session 메타데이터 등록.
- * @param {Object} storyData
- */
-function setupMediaSession(storyData) {
-  if (!('mediaSession' in navigator)) return;
-
-  navigator.mediaSession.metadata = new MediaMetadata({
-    title:  storyData?.title  || 'Busan Audio Story',
-    artist: 'Busan Audio Stories',
-    album:  'Local Tales of Busan',
-    artwork: storyData?.imageUrl
-      ? [
-          { src: storyData.imageUrl, sizes: '512x512', type: 'image/jpeg' },
-          { src: storyData.imageUrl, sizes: '256x256', type: 'image/jpeg' },
-        ]
-      : [],
-  });
-
-  navigator.mediaSession.setActionHandler('play',         () => audio.play());
-  navigator.mediaSession.setActionHandler('pause',        () => audio.pause());
-  navigator.mediaSession.setActionHandler('seekbackward', (d) => {
-    audio.currentTime = Math.max(audio.currentTime - (d.seekOffset || 10), 0);
-  });
-  navigator.mediaSession.setActionHandler('seekforward', (d) => {
-    audio.currentTime = Math.min(audio.currentTime + (d.seekOffset || 15), audio.duration);
-  });
-
-  try {
-    navigator.mediaSession.setActionHandler('seekto', (d) => {
-      audio.currentTime = d.seekTime;
-    });
-  } catch (_) { /* 구형 브라우저 무시 */ }
-
-  console.info('[MediaSession] 등록 완료');
-}
-
-function updateMediaSession() {
-  if (!('mediaSession' in navigator)) return;
-  navigator.mediaSession.playbackState = audio.paused ? 'paused' : 'playing';
-}
-
-function updateMediaSessionPosition() {
-  if (!('mediaSession' in navigator)) return;
-  if (isNaN(audio.duration) || audio.duration === 0) return;
-  try {
-    navigator.mediaSession.setPositionState({
-      duration:     audio.duration,
-      playbackRate: audio.playbackRate,
-      position:     audio.currentTime,
-    });
-  } catch (_) { /* 미지원 브라우저 무시 */ }
-}
-
-/* ──────────────────────────────────────────────────────────────
-   9. 앱 진입점 (Main Entry Point)
-────────────────────────────────────────────────────────────── */
-
-/**
- * 앱 초기화 메인 함수.
- *
- * 실행 흐름:
- *   1. 언어 전환 버튼 초기화
- *   2. 오디오 플레이어 이벤트 바인딩
- *   3. URL ?id= 파라미터 읽기
- *   4. id 없으면 → QR코드 안내 화면 표시 후 종료
- *   5. id 있으면 → 구글 시트 CSV fetch → 파싱 → 렌더링
- *   6. Media Session API 설정
- */
 async function initApp() {
-  console.info('[App] 부산 오디오 스토리 앱 초기화 시작');
-
   initLangSwitcher();
   initPlayer();
-  showLoading();
 
-  // URL에서 스토리 ID 읽기
-  const storyId = getStoryIdFromURL();
-  console.info('[App] 스토리 ID:', storyId ?? '(없음)');
+  // 사용자 요청: 앱 시작 시 무조건 패스워드 입력창이 가장 먼저 나온다.
+  showPasswordScreen();
+  
+  // 패스워드 화면을 표시해둔 상태에서 백그라운드로 CSV 데이터 미리 로드
+  await preloadCSV();
 
-  // ── 핵심 접근 제어 ──
-  // id가 없으면 어떤 콘텐츠도 표시하지 않음.
-  // QR코드 없이는 재생/다운로드 불가.
-  if (!storyId) {
-    showError('idMissing', 'idMissingDesc');
-    return;
-  }
+  const form = document.getElementById('password-form');
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const inputPw = document.getElementById('password-input').value.trim();
+    const errorEl = document.getElementById('password-error');
+    const submitBtn = document.getElementById('password-submit-btn');
 
-  // 구글 시트에서 해당 id 데이터 가져오기
-  try {
-    const response = await fetchStoryData(storyId);
-    const data     = response.data;
+    if (!inputPw) return;
 
-    // 패스워드 로직 추가
-    if (data.password) {
-      showPasswordScreen();
-      // 패스워드 제출 이벤트 바인딩
-      const form = document.getElementById('password-form');
-      form.onsubmit = (e) => {
-        e.preventDefault();
-        const input = document.getElementById('password-input').value;
-        const errorEl = document.getElementById('password-error');
-
-        if (input === data.password) {
-          hidePasswordScreen();
-          renderStoryContent(data);
-          setupMediaSession(data);
-          showContent();
-          console.info('[App] 패스워드 일치, 콘텐츠 로드');
-        } else {
-          errorEl.classList.remove('hidden');
-          // 애니메이션 효과를 위해 흔들기 (Tailwind animate-bounce 활용)
-          setTimeout(() => errorEl.classList.add('hidden'), 2000);
-        }
-      };
-    } else {
-      // 패스워드 없으면 바로 렌더링
-      renderStoryContent(data);
-      setupMediaSession(data);
-      showContent();
+    // 만약 데이터가 아직 없다면(또는 로드 실패였다면) 다시 로드
+    if (allRowsCache.length === 0) {
+      submitBtn.disabled = true;
+      showLoading();
+      await preloadCSV();
+      submitBtn.disabled = false;
+      document.getElementById('loading-screen').className = 'hidden';
     }
 
-    console.info('[App] 스토리 로드 완료:', data.title);
+    // "그 패스워드에 해당하는 파일" 찾기
+    // 시트의 password 필드가 사용자 입력값과 일치하는 행을 찾는다.
+    const foundData = allRowsCache.find(row => 
+      row.password && row.password.trim() === inputPw
+    );
 
-  } catch (error) {
-    console.error('[App] 스토리 로드 실패:', error);
-    showError('errorTitle', 'errorDesc');
-  }
+    if (foundData) {
+      // 패스워드 매칭 성공 시 데이터 매핑
+      const storyData = {
+        id:          foundData['id']          || 'Unknown',
+        title:       foundData['title']       || 'Untitled Story',
+        description: foundData['description'] || '',
+        imageUrl:    foundData['imageurl']    || foundData['imageUrl'] || '',
+        audioUrl:    foundData['audiourl']    || foundData['audioUrl'] || ''
+      };
+
+      hidePasswordScreen();
+      renderStoryContent(storyData);
+      showContent();
+    } else {
+      // 데모 데이터에서 일치하는 비밀번호가 있는지 확인
+      const demoData = DEMO_FALLBACK.find(row => row.id === inputPw || row.password === inputPw);
+      if (demoData) {
+        hidePasswordScreen();
+        renderStoryContent(demoData);
+        showContent();
+        return;
+      }
+
+      // 일치하는 패스워드를 찾을 수 없음
+      errorEl.classList.remove('hidden');
+      errorEl.textContent = t('passwordError') || "Incorrect password. Please try again.";
+      setTimeout(() => errorEl.classList.add('hidden'), 3000);
+    }
+  };
 }
 
-/* ──────────────────────────────────────────────────────────────
-   10. DOMContentLoaded 후 앱 시작
-────────────────────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', initApp);
