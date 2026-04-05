@@ -236,7 +236,9 @@ function renderStoryContent(data) {
   }
   coverImg.src = imgUrl;
   
-  const finalAudioUrl = convertDriveLink(data.audioUrl);
+  const imgBtnMatch = (data.audioUrl || '').match(/\/d\/([a-zA-Z0-9_-]+)/);
+  const finalAudioUrl = imgBtnMatch ? `/api/proxy?id=${imgBtnMatch[1]}` : data.audioUrl;
+  
   const audioEl = document.getElementById('audio-player');
   // 구글 드라이브 재생 시 CORS 우회를 위해 속성 강제 제거
   audioEl.removeAttribute('crossorigin'); 
@@ -244,7 +246,9 @@ function renderStoryContent(data) {
   
   // 다운로드 버튼에 필요한 정보 저장
   const downloadBtn = document.getElementById('download-btn');
-  downloadBtn.dataset.url = finalAudioUrl;
+  // 다운로드는 브라우저 새 창에서 원본 링크로 직접 다운받는게 가장 안전함 (대용량 proxy 방지)
+  const directDownloadUrl = imgBtnMatch ? `https://drive.google.com/uc?export=download&id=${imgBtnMatch[1]}` : finalAudioUrl;
+  downloadBtn.dataset.url = directDownloadUrl;
   downloadBtn.dataset.filename = (data.title || 'busan-story') + '.mp3';
 }
 
