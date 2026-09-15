@@ -171,19 +171,24 @@ let allRowsCache = [];
 
 async function preloadCSV() {
   try {
-    // Apps Script 동기화 URL이 설정되어 있다면 CSV 로드 전 동기화 호출 (새 파일 자동 등록)
+    // Apps Script 동기화 URL이 설정되어 있다면 백그라운드로 호출 (사용자 진입을 15초 동안 차단하지 않도록 비동기 실행)
     if (typeof GAS_SYNC_URL !== 'undefined' && GAS_SYNC_URL) {
-      try {
-        console.info('[Sync] Triggering Drive-to-Sheet sync...');
-        await fetch(GAS_SYNC_URL, { mode: 'no-cors' });
-      } catch (syncErr) {
+      console.info('[Sync] Triggering Drive-to-Sheet sync (background)...');
+      fetch(GAS_SYNC_URL, { mode: 'no-cors' }).catch(syncErr => {
         console.warn('[Sync] Drive sync failed or skipped:', syncErr);
-      }
+      });
     }
 
     const freshUrl = `${SHEET_CSV_URL}&t=${Date.now()}`;
     console.info('[Sheet] Fetching CSV:', freshUrl);
-    const response = await fetch(freshUrl, { cache: 'no-store' });
+
+    // 모바일 통신 지연 시 무한 대기를 방지하기 위해 6초 타임아웃 적용
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+    const response = await fetch(freshUrl, { cache: 'no-store', signal: controller.signal });
+    clearTimeout(timeoutId);
+
     if (response.ok) {
       const csvText = await response.text();
       allRowsCache = parseCSV(csvText);
@@ -385,29 +390,31 @@ async function initApp() {
 
   // 사용자 요청: 앱 시작 시 무조건 패스워드 입력창이 가장 먼저 나온다.
   showPasswordScreen();
-  
-  // 패스워드 화면을 표시해둔 상태에서 백그라운드로 CSV 데이터 미리 로드
-  await preloadCSV();
 
   const form = document.getElementById('password-form');
   form.onsubmit = async (e) => {
     e.preventDefault();
-    const inputPw = document.getElementById('password-input').value.trim();
+    const rawInput = document.getElementById('password-input').value;
     const errorEl = document.getElementById('password-error');
     const submitBtn = document.getElementById('password-submit-btn');
 
-    if (!inputPw) return;
+    if (!rawInput) return;
 
-    if (allRowsCache.length === 0) {
-      submitBtn.disabled = true;
-      showLoading();
-      await preloadCSV();
-      submitBtn.disabled = false;
-      document.getElementById('loading-screen').className = 'hidden';
-    }
+    // 모바일 키보드 호환성: 전각 문자 변환, 앞뒤/중간 공백 및 제어문자 제거, 소문자 변환
+    const cleanPw = rawInput.normalize('NFKC').replace(/[\s\u200B-\u200D\uFEFF]/g, '').toLowerCase();
 
-    if (inputPw.toLowerCase() === 'rebusan') {
+    if (cleanPw === 'rebusan') {
       hidePasswordScreen();
+
+      // 아직 데이터 로딩이 완료되지 않은 경우에만 로딩 표시 후 대기
+      if (allRowsCache.length === 0) {
+        submitBtn.disabled = true;
+        showLoading();
+        await preloadCSV();
+        submitBtn.disabled = false;
+        document.getElementById('loading-screen').className = 'hidden';
+      }
+
       renderLibraryGrid();
       showLibraryScreen();
     } else {
@@ -416,6 +423,9 @@ async function initApp() {
       setTimeout(() => errorEl.classList.add('hidden'), 3000);
     }
   };
+
+  // 패스워드 화면을 표시해둔 상태에서 백그라운드로 CSV 데이터 미리 로드 (사용자 입력을 차단하지 않도록 비동기 실행)
+  preloadCSV();
 
   document.getElementById('back-to-library-btn').onclick = () => {
     showLibraryScreen();
