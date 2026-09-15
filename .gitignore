@@ -1,0 +1,16 @@
+# Node
+node_modules/
+.npm
+
+# 로컬 개발 캐시
+.DS_Store
+Thumbs.db
+
+# 환경 변수 (비밀키 등은 절대 커밋 금지)
+.env
+.env.local
+
+# Vercel 빌드 결과물 (vercel.json은 커밋 대상)
+.vercel
+
+.vercel
