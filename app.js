@@ -368,9 +368,27 @@ async function initApp() {
   };
 }
 
+function getChosung(str) {
+  if (!str) return '';
+  const firstChar = str.charAt(0);
+  const code = firstChar.charCodeAt(0);
+  
+  if (code >= 44032 && code <= 55203) {
+    const cho = Math.floor((code - 44032) / 588);
+    const chosungList = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+    return chosungList[cho];
+  }
+  
+  if (/[a-zA-Z]/.test(firstChar)) return firstChar.toUpperCase();
+  return '#';
+}
+
 function renderLibraryGrid() {
   const grid = document.getElementById('library-grid');
+  const indexBar = document.getElementById('fast-scroll-index');
   grid.innerHTML = '';
+  indexBar.innerHTML = '';
+  indexBar.classList.remove('hidden');
   
   const sortedRows = [...allRowsCache].sort((a, b) => {
     const titleA = a.title || '';
@@ -382,19 +400,53 @@ function renderLibraryGrid() {
     sortedRows.push(...DEMO_FALLBACK);
   }
 
+  let currentHeader = '';
+  const indices = new Set();
+
   sortedRows.forEach(row => {
     const bookTitle = row.title || 'Untitled';
+    let cho = getChosung(bookTitle);
+    
+    const choMap = {'ㄲ':'ㄱ','ㄸ':'ㄷ','ㅃ':'ㅂ','ㅆ':'ㅅ','ㅉ':'ㅈ'};
+    if (choMap[cho]) cho = choMap[cho];
+
+    if (cho !== currentHeader) {
+      currentHeader = cho;
+      indices.add(cho);
+      
+      const headerEl = document.createElement('div');
+      headerEl.id = 'idx-' + cho;
+      headerEl.className = 'text-sepia-400 font-bold mt-4 mb-2 pl-1 border-b border-warm-700/50 text-sm';
+      headerEl.textContent = cho;
+      grid.appendChild(headerEl);
+    }
+
     const bookEl = document.createElement('div');
     bookEl.className = 'book-item';
     bookEl.onclick = () => playStory(row);
 
     bookEl.innerHTML = `
-      <div class="z-10 text-center px-1">
-        <div class="text-sepia-300 text-[10px] mb-2 uppercase tracking-widest font-sans opacity-70">Audio Story</div>
-        <h3 class="text-sepia-100 font-serif text-[15px] md:text-base font-bold leading-tight break-keep">${bookTitle}</h3>
+      <div class="flex-1 px-2 pl-6 z-10 text-left">
+        <div class="text-sepia-300 text-[9px] mb-0.5 uppercase tracking-widest font-sans opacity-70">Audio Story</div>
+        <h3 class="text-sepia-100 font-serif text-[15px] font-bold leading-snug break-keep pr-2">${bookTitle}</h3>
+      </div>
+      <div class="text-sepia-400/50 pr-1 z-10">
+        <i class="fa-solid fa-play text-sm"></i>
       </div>
     `;
     grid.appendChild(bookEl);
+  });
+
+  Array.from(indices).forEach(idx => {
+    const btn = document.createElement('button');
+    btn.textContent = idx;
+    btn.onclick = () => {
+      const target = document.getElementById('idx-' + idx);
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    };
+    indexBar.appendChild(btn);
   });
 }
 
