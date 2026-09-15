@@ -67,19 +67,15 @@
     * { box-sizing: border-box; }
 
     body {
-      background-color: #1a1008;
+      background-color: #ffffff;
+      color: #2c1a0e;
       font-family: 'Inter', sans-serif;
       overscroll-behavior: none;
     }
 
     /* 배경 텍스처: 빈티지 노이즈 그레인 */
     body::before {
-      content: '';
-      position: fixed;
-      inset: 0;
-      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
-      pointer-events: none;
-      z-index: 0;
+      display: none;
     }
 
     /* 앨범 아트 이미지 — 부드러운 sepia 필터 */
@@ -102,30 +98,30 @@
       -webkit-appearance: none;
       width: 18px; height: 18px;
       border-radius: 50%;
-      background: #d4a855;
-      border: 2px solid #3e2b0e;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.5);
+      background: #b8893a;
+      border: 2px solid #ffffff;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.25);
       cursor: pointer;
     }
     #progress-bar::-moz-range-thumb {
       width: 18px; height: 18px;
       border-radius: 50%;
-      background: #d4a855;
-      border: 2px solid #3e2b0e;
+      background: #b8893a;
+      border: 2px solid #ffffff;
       cursor: pointer;
     }
     #progress-bar::-webkit-slider-runnable-track {
       height: 6px;
       border-radius: 3px;
-      background: linear-gradient(to right, #d4a855 var(--progress, 0%), #3e2b0e var(--progress, 0%));
+      background: linear-gradient(to right, #b8893a var(--progress, 0%), #e8dec8 var(--progress, 0%));
     }
     #progress-bar::-moz-range-track {
       height: 6px;
       border-radius: 3px;
-      background: #3e2b0e;
+      background: #e8dec8;
     }
     #progress-bar::-moz-range-progress {
-      background: #d4a855;
+      background: #b8893a;
       height: 6px;
       border-radius: 3px;
     }
@@ -148,7 +144,7 @@
     .wave-bar {
       width: 4px;
       border-radius: 2px;
-      background: #d4a855;
+      background: #b8893a;
       transform-origin: bottom;
       animation: wave 1.2s ease-in-out infinite;
     }
@@ -160,8 +156,8 @@
 
     /* 언어 버튼 활성화 */
     .lang-btn.active {
-      background-color: #d4a855;
-      color: #1a1008;
+      background-color: #b8893a;
+      color: #ffffff;
     }
 
     /* 페이드인 트랜지션 */
@@ -188,42 +184,43 @@
       animation-play-state: paused;
     }
 
-    /* 가로형 책(오디오북) 디자인 */
+    /* 가로형 책(오디오북) 디자인 - 흰색 바탕 테마 */
     .book-item {
       position: relative;
-      background: linear-gradient(to bottom, #4a321c 0%, #2c1e13 30%, #2c1e13 70%, #4a321c 100%);
-      border-radius: 4px;
-      box-shadow: 
-        inset 0 4px 6px rgba(255,255,255,0.05),
-        0 4px 8px rgba(0,0,0,0.5);
+      background: #ffffff;
+      border: 1px solid #e7ded0;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(94, 64, 22, 0.08);
       overflow: hidden;
       display: flex;
       flex-direction: row;
       align-items: center;
-      padding: 0.75rem 1rem;
+      padding: 0.85rem 1.15rem;
       cursor: pointer;
-      transition: transform 0.2s, background 0.2s;
-      min-height: 80px;
+      transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s, background 0.2s;
+      min-height: 76px;
       margin-bottom: 0.75rem;
     }
     .book-item:hover, .book-item:active {
       transform: translateX(4px);
-      background: linear-gradient(to bottom, #5a3c22 0%, #3e2b1b 30%, #3e2b1b 70%, #5a3c22 100%);
+      border-color: #b8893a;
+      box-shadow: 0 4px 14px rgba(94, 64, 22, 0.15);
+      background: #fdfbf7;
     }
     .book-item::before {
       content: '';
       position: absolute;
-      top: 6px; bottom: 6px; left: 6px; right: 6px;
-      border: 1px solid rgba(212, 168, 85, 0.2);
-      border-radius: 2px;
+      top: 5px; bottom: 5px; left: 5px; right: 5px;
+      border: 1px solid rgba(184, 137, 58, 0.18);
+      border-radius: 6px;
       pointer-events: none;
     }
     .book-item::after {
       content: '';
       position: absolute;
-      top: 0; bottom: 0; left: 24px;
+      top: 0; bottom: 0; left: 18px;
       width: 4px;
-      background: linear-gradient(to right, rgba(0,0,0,0.5) 0%, rgba(255,255,255,0.05) 50%, rgba(0,0,0,0.5) 100%);
+      background: linear-gradient(to right, rgba(184, 137, 58, 0.2) 0%, rgba(184, 137, 58, 0.05) 50%, rgba(184, 137, 58, 0.2) 100%);
     }
 
     /* 인덱스 스크롤 바 */
@@ -237,22 +234,25 @@
       align-items: center;
       gap: 1px;
       z-index: 50;
-      background: rgba(44, 30, 19, 0.7);
-      backdrop-filter: blur(4px);
-      border-radius: 12px;
-      padding: 6px 2px;
-      border: 1px solid rgba(212, 168, 85, 0.15);
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(6px);
+      border-radius: 14px;
+      padding: 6px 3px;
+      border: 1px solid #e0d0b8;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.08);
     }
     .fast-scroll-index button {
       font-size: 10px;
-      color: #d4a855;
-      opacity: 0.6;
+      color: #7d5820;
+      font-weight: 600;
+      opacity: 0.65;
       padding: 2px 4px;
       transition: all 0.2s;
     }
     .fast-scroll-index button:hover, .fast-scroll-index button:active {
       opacity: 1;
       transform: scale(1.3);
+      color: #b8893a;
       font-weight: bold;
     }
   </style>
@@ -266,20 +266,20 @@
   <header class="w-full px-4 pt-5 pb-3 flex items-center justify-between z-20 relative">
     <!-- 로고 -->
     <div class="flex items-center gap-2">
-      <div class="w-9 h-9 rounded-full bg-sepia-300 flex items-center justify-center shadow-lg">
+      <div class="w-9 h-9 rounded-full bg-sepia-300 flex items-center justify-center shadow-md">
         <i class="fa-solid fa-headphones text-warm-900 text-base"></i>
       </div>
       <div>
-        <p class="text-sepia-200 font-serif text-sm font-semibold leading-tight tracking-wide">Busan Audio</p>
-        <p class="text-sepia-500 text-xs leading-none tracking-widest uppercase">Stories</p>
+        <p class="text-warm-900 font-serif text-sm font-semibold leading-tight tracking-wide">Busan Audio</p>
+        <p class="text-sepia-600 text-xs leading-none tracking-widest uppercase">Stories</p>
       </div>
     </div>
 
     <!-- 다국어 전환 버튼 -->
-    <div class="flex items-center gap-1 bg-warm-900 rounded-full px-1.5 py-1 shadow-inner" id="lang-switcher">
+    <div class="flex items-center gap-1 bg-warm-100 border border-warm-200 rounded-full px-1.5 py-1 shadow-sm" id="lang-switcher">
       <button class="lang-btn active text-xs font-semibold px-3 py-1 rounded-full transition-all duration-200" data-lang="en">EN</button>
-      <button class="lang-btn text-sepia-400 text-xs font-semibold px-3 py-1 rounded-full transition-all duration-200" data-lang="ko">한</button>
-      <button class="lang-btn text-sepia-400 text-xs font-semibold px-3 py-1 rounded-full transition-all duration-200" data-lang="ja">日</button>
+      <button class="lang-btn text-warm-600 text-xs font-semibold px-3 py-1 rounded-full transition-all duration-200" data-lang="ko">한</button>
+      <button class="lang-btn text-warm-600 text-xs font-semibold px-3 py-1 rounded-full transition-all duration-200" data-lang="ja">日</button>
     </div>
   </header>
 
@@ -288,13 +288,13 @@
   ══════════════════════════════════════════════════ -->
   <div id="loading-screen" class="flex-1 flex flex-col items-center justify-center px-6 gap-6">
     <div class="relative">
-      <div class="w-24 h-24 rounded-2xl bg-warm-800 shadow-2xl flex items-center justify-center">
-        <i class="fa-solid fa-book-open text-sepia-300 text-4xl spinner"></i>
+      <div class="w-24 h-24 rounded-2xl bg-warm-50 border border-warm-200 shadow-lg flex items-center justify-center">
+        <i class="fa-solid fa-book-open text-sepia-400 text-4xl spinner"></i>
       </div>
     </div>
     <div class="text-center">
-      <p class="text-sepia-200 font-serif text-lg" id="loading-text">Loading story...</p>
-      <p class="text-sepia-500 text-sm mt-1">부산의 이야기를 불러오는 중입니다</p>
+      <p class="text-warm-900 font-serif text-lg font-semibold" id="loading-text">Loading story...</p>
+      <p class="text-warm-500 text-sm mt-1">부산의 이야기를 불러오는 중입니다</p>
     </div>
   </div>
 
@@ -302,14 +302,14 @@
        SECTION 3: 에러 화면
   ══════════════════════════════════════════════════ -->
   <div id="error-screen" class="hidden flex-1 flex flex-col items-center justify-center px-6 gap-5 text-center">
-    <div class="w-20 h-20 rounded-2xl bg-warm-800 flex items-center justify-center shadow-xl">
-      <i class="fa-solid fa-triangle-exclamation text-sepia-400 text-3xl"></i>
+    <div class="w-20 h-20 rounded-2xl bg-warm-50 border border-warm-200 flex items-center justify-center shadow-md">
+      <i class="fa-solid fa-triangle-exclamation text-sepia-500 text-3xl"></i>
     </div>
     <div>
-      <h2 class="text-sepia-100 font-serif text-xl font-semibold" id="error-title">Story Not Found</h2>
-      <p class="text-sepia-400 text-sm mt-2 leading-relaxed" id="error-desc">We couldn't load this audio story.<br/>Please check the QR code and try again.</p>
+      <h2 class="text-warm-900 font-serif text-xl font-semibold" id="error-title">Story Not Found</h2>
+      <p class="text-warm-600 text-sm mt-2 leading-relaxed" id="error-desc">We couldn't load this audio story.<br/>Please check the QR code and try again.</p>
     </div>
-    <button onclick="window.location.reload()" class="mt-2 px-6 py-3 bg-sepia-600 text-sepia-100 text-sm font-semibold rounded-full shadow-lg active:scale-95 transition-transform">
+    <button onclick="window.location.reload()" class="mt-2 px-6 py-3 bg-sepia-400 hover:bg-sepia-500 text-white text-sm font-semibold rounded-full shadow-md active:scale-95 transition-all">
       <i class="fa-solid fa-rotate-right mr-2"></i>Try Again
     </button>
   </div>
@@ -319,17 +319,17 @@
   ══════════════════════════════════════════════════ -->
   <div id="password-screen" class="hidden flex-1 flex flex-col items-center justify-center px-6 gap-8 text-center fade-in">
     <div class="relative">
-      <div class="w-20 h-20 rounded-full bg-sepia-300 flex items-center justify-center shadow-[0_0_30px_rgba(212,168,85,0.4)]">
+      <div class="w-20 h-20 rounded-full bg-sepia-300 flex items-center justify-center shadow-[0_4px_20px_rgba(212,168,85,0.3)]">
         <i class="fa-solid fa-lock text-warm-900 text-3xl"></i>
       </div>
-      <div class="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-warm-800 border-4 border-warm-900 flex items-center justify-center">
-        <i class="fa-solid fa-key text-sepia-400 text-[10px]"></i>
+      <div class="absolute -bottom-1 -right-1 w-8 h-8 rounded-full bg-warm-100 border-2 border-white flex items-center justify-center shadow">
+        <i class="fa-solid fa-key text-sepia-500 text-[10px]"></i>
       </div>
     </div>
     
     <div class="max-w-[280px]">
-      <h2 class="text-sepia-100 font-serif text-2xl font-bold mb-2" id="password-title">Private Audio Library</h2>
-      <p class="text-sepia-400 text-sm leading-relaxed" id="password-desc">Please enter the access code to listen.</p>
+      <h2 class="text-warm-900 font-serif text-2xl font-bold mb-2" id="password-title">Private Audio Library</h2>
+      <p class="text-warm-600 text-sm leading-relaxed" id="password-desc">Please enter the access code to listen.</p>
     </div>
 
     <form id="password-form" class="w-full max-w-[280px] flex flex-col gap-4">
@@ -337,20 +337,20 @@
         <input 
           type="password" 
           id="password-input" 
-          placeholder="Access Code"
+          placeholder="Access Code" 
           required
-          class="w-full bg-warm-800/50 border-2 border-warm-700 rounded-2xl px-6 py-4 text-center text-sepia-100 text-xl tracking-wide focus:border-sepia-400 outline-none transition-all placeholder:text-warm-600"
+          class="w-full bg-white border-2 border-warm-200 rounded-2xl px-6 py-4 text-center text-warm-900 text-xl tracking-wide focus:border-sepia-400 outline-none transition-all placeholder:text-warm-300 shadow-sm"
         />
       </div>
       <button 
         type="submit"
-        class="w-full py-4 bg-sepia-300 hover:bg-sepia-200 text-warm-900 font-bold rounded-2xl shadow-xl active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+        class="w-full py-4 bg-sepia-400 hover:bg-sepia-500 text-white font-bold rounded-2xl shadow-md active:scale-[0.98] transition-all flex items-center justify-center gap-2"
         id="password-submit-btn"
       >
         <span>Enter Library</span>
         <i class="fa-solid fa-chevron-right text-xs"></i>
       </button>
-      <p id="password-error" class="hidden text-red-400 text-sm font-medium animate-bounce mt-2">Incorrect code. Please try again.</p>
+      <p id="password-error" class="hidden text-red-500 text-sm font-medium animate-bounce mt-2">Incorrect code. Please try again.</p>
     </form>
   </div>
 
@@ -360,10 +360,10 @@
   <div id="library-screen" class="hidden flex-1 flex flex-col px-4 pt-4 pb-12 fade-in relative z-10 overflow-y-auto">
     <div class="flex items-center justify-between mb-6 px-2">
       <div>
-        <h2 class="text-sepia-100 font-serif text-3xl font-bold">Audio Library</h2>
-        <p class="text-sepia-400 text-sm mt-1">Busan Audio Stories</p>
+        <h2 class="text-warm-900 font-serif text-3xl font-bold">Audio Library</h2>
+        <p class="text-warm-500 text-sm mt-1">Busan Audio Stories</p>
       </div>
-      <button onclick="location.reload()" class="w-10 h-10 rounded-full bg-warm-800 flex items-center justify-center text-sepia-400 hover:text-sepia-100 transition-colors">
+      <button onclick="location.reload()" class="w-10 h-10 rounded-full bg-warm-100 border border-warm-200 flex items-center justify-center text-warm-600 hover:text-warm-900 hover:bg-warm-200 transition-colors shadow-sm">
         <i class="fa-solid fa-arrow-right-from-bracket"></i>
       </button>
     </div>
@@ -384,7 +384,7 @@
   <main id="main-content" class="hidden flex-1 flex flex-col px-4 pb-4 pt-2 gap-5 relative z-10 overflow-y-auto fade-in" style="padding-bottom: 220px;">
     <!-- 뒤로 가기 버튼 -->
     <div class="w-full max-w-sm mx-auto flex">
-      <button id="back-to-library-btn" class="flex items-center gap-2 text-sepia-400 hover:text-sepia-200 transition-colors py-2 px-1">
+      <button id="back-to-library-btn" class="flex items-center gap-2 text-warm-600 hover:text-warm-900 transition-colors py-2 px-1">
         <i class="fa-solid fa-chevron-left text-sm"></i>
         <span class="text-sm font-medium">Library</span>
       </button>
@@ -393,13 +393,13 @@
     <!-- 앨범 아트 / 책 표지 -->
     <div class="relative w-full max-w-sm mx-auto">
       <!-- 그림자 레이어 (입체감) -->
-      <div class="absolute inset-x-4 bottom-0 h-8 bg-black/40 blur-xl rounded-full translate-y-2"></div>
+      <div class="absolute inset-x-4 bottom-0 h-8 bg-black/10 blur-xl rounded-full translate-y-2"></div>
 
       <!-- 표지 이미지(턴테이블 뷰) 컨테이너 -->
-      <div class="relative rounded-2xl overflow-hidden shadow-2xl border border-warm-700/40 aspect-square bg-warm-800 flex items-center justify-center p-6">
+      <div class="relative rounded-2xl overflow-hidden shadow-xl border border-warm-200 aspect-square bg-warm-50 flex items-center justify-center p-6">
         
         <!-- 바이닐 레코드 -->
-        <div id="vinyl-record" class="spin-record paused w-full h-full bg-[#111] rounded-full flex items-center justify-center relative shadow-[inset_0_0_20px_rgba(0,0,0,0.8),0_10px_30px_rgba(0,0,0,0.5)] border-[6px] border-warm-900 overflow-hidden">
+        <div id="vinyl-record" class="spin-record paused w-full h-full bg-[#222] rounded-full flex items-center justify-center relative shadow-[inset_0_0_20px_rgba(0,0,0,0.8),0_10px_25px_rgba(0,0,0,0.25)] border-[6px] border-warm-800 overflow-hidden">
           <!-- 바이닐 홈 텍스처 (여러 겹의 원) -->
           <div class="absolute inset-[4%] rounded-full border border-white/5"></div>
           <div class="absolute inset-[12%] rounded-full border border-white/5"></div>
@@ -434,24 +434,24 @@
     <div class="px-1 fade-in">
       <!-- 로케이션 태그 -->
       <div class="flex items-center gap-1.5 mb-2">
-        <i class="fa-solid fa-location-dot text-sepia-400 text-xs"></i>
-        <span class="text-sepia-400 text-xs tracking-widest uppercase font-medium">Busan, Korea</span>
+        <i class="fa-solid fa-location-dot text-sepia-500 text-xs"></i>
+        <span class="text-sepia-600 text-xs tracking-widest uppercase font-semibold">Busan, Korea</span>
       </div>
 
       <!-- 제목 -->
-      <h1 id="story-title" class="text-sepia-100 font-serif text-2xl font-bold leading-snug mb-3">
+      <h1 id="story-title" class="text-warm-900 font-serif text-2xl font-bold leading-snug mb-3">
         The Memory of Bosu-dong
       </h1>
 
       <!-- 구분선: 빈티지 장식선 -->
       <div class="flex items-center gap-2 mb-3">
-        <div class="h-px flex-1 bg-gradient-to-r from-transparent to-sepia-600/50"></div>
-        <i class="fa-solid fa-star text-sepia-600 text-xs"></i>
-        <div class="h-px flex-1 bg-gradient-to-l from-transparent to-sepia-600/50"></div>
+        <div class="h-px flex-1 bg-gradient-to-r from-transparent to-warm-300"></div>
+        <i class="fa-solid fa-star text-sepia-400 text-xs"></i>
+        <div class="h-px flex-1 bg-gradient-to-l from-transparent to-warm-300"></div>
       </div>
 
       <!-- 설명 -->
-      <p id="story-description" class="text-warm-300 text-sm leading-relaxed">
+      <p id="story-description" class="text-warm-700 text-sm leading-relaxed">
         A 30-minute immersive audio journey through the old book alleys of Bosu-dong...
       </p>
     </div>
@@ -463,15 +463,15 @@
   ══════════════════════════════════════════════════ -->
   <footer id="player-footer" class="hidden fixed bottom-0 left-0 right-0 z-30">
     <!-- 상단 블러 그라디언트 (콘텐츠와 자연스러운 연결) -->
-    <div class="h-8 bg-gradient-to-t from-warm-900 to-transparent pointer-events-none"></div>
+    <div class="h-8 bg-gradient-to-t from-white to-transparent pointer-events-none"></div>
 
     <!-- 플레이어 본체 -->
-    <div class="bg-warm-900 border-t border-warm-700/50 shadow-[0_-8px_32px_rgba(0,0,0,0.6)] px-5 pt-4 pb-6">
+    <div class="bg-white/95 backdrop-blur border-t border-warm-200 shadow-[0_-8px_30px_rgba(0,0,0,0.06)] px-5 pt-4 pb-6">
 
       <!-- ─ 진행률 바 섹션 ─ -->
       <div class="flex items-center gap-3 mb-4">
         <!-- 현재 재생 시간 -->
-        <span id="current-time" class="text-sepia-400 text-xs font-medium w-10 text-right tabular-nums">0:00</span>
+        <span id="current-time" class="text-warm-500 text-xs font-medium w-10 text-right tabular-nums">0:00</span>
 
         <!-- 슬라이더 진행률 바 -->
         <div class="flex-1 relative">
@@ -482,14 +482,14 @@
             max="100"
             value="0"
             step="0.1"
-            class="w-full h-1.5 rounded-full bg-warm-700 outline-none"
+            class="w-full h-1.5 rounded-full bg-warm-200 outline-none"
             style="--progress: 0%;"
             aria-label="Audio progress"
           />
         </div>
 
         <!-- 전체 재생 시간 -->
-        <span id="total-time" class="text-sepia-400 text-xs font-medium w-10 tabular-nums">0:00</span>
+        <span id="total-time" class="text-warm-500 text-xs font-medium w-10 tabular-nums">0:00</span>
       </div>
 
       <!-- ─ 컨트롤 버튼 섹션 ─ -->
@@ -502,19 +502,19 @@
           aria-label="Download audio"
           title="Download for offline listening"
         >
-          <div class="w-11 h-11 rounded-full bg-warm-800 border border-warm-600/40 flex items-center justify-center shadow-md active:scale-90 transition-transform group-hover:bg-warm-700">
-            <i class="fa-solid fa-download text-sepia-300 text-sm"></i>
+          <div class="w-11 h-11 rounded-full bg-warm-50 border border-warm-200 flex items-center justify-center shadow-sm active:scale-90 transition-transform group-hover:bg-warm-100">
+            <i class="fa-solid fa-download text-sepia-600 text-sm"></i>
           </div>
-          <span class="text-sepia-500 text-xs" id="download-label">Save</span>
+          <span class="text-warm-500 text-xs" id="download-label">Save</span>
         </button>
 
         <!-- 중앙: 재생/일시정지 버튼 -->
         <button
           id="play-pause-btn"
-          class="w-16 h-16 rounded-full bg-sepia-300 flex items-center justify-center shadow-xl active:scale-90 transition-all duration-150"
+          class="w-16 h-16 rounded-full bg-sepia-400 hover:bg-sepia-500 text-white flex items-center justify-center shadow-lg active:scale-90 transition-all duration-150"
           aria-label="Play or Pause"
         >
-          <i id="play-icon" class="fa-solid fa-play text-warm-900 text-xl ml-1"></i>
+          <i id="play-icon" class="fa-solid fa-play text-white text-xl ml-1"></i>
         </button>
 
         <!-- 오른쪽: 15초 앞으로 버튼 -->
@@ -523,10 +523,10 @@
           class="flex flex-col items-center gap-1 group"
           aria-label="Skip forward 15 seconds"
         >
-          <div class="w-11 h-11 rounded-full bg-warm-800 border border-warm-600/40 flex items-center justify-center shadow-md active:scale-90 transition-transform group-hover:bg-warm-700">
-            <i class="fa-solid fa-forward-step text-sepia-300 text-sm"></i>
+          <div class="w-11 h-11 rounded-full bg-warm-50 border border-warm-200 flex items-center justify-center shadow-sm active:scale-90 transition-transform group-hover:bg-warm-100">
+            <i class="fa-solid fa-forward-step text-sepia-600 text-sm"></i>
           </div>
-          <span class="text-sepia-500 text-xs">+15s</span>
+          <span class="text-warm-500 text-xs">+15s</span>
         </button>
 
       </div>

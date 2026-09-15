@@ -18,6 +18,9 @@ const SHEET_GID = '0'; // 「오디오 파일 저장소」 탭 (첫 번째 탭)
 /** 구글 시트 공개 CSV 다운로드 URL */
 const SHEET_CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=${SHEET_GID}`;
 
+/** 구글 드라이브-시트 자동 동기화 Google Apps Script 웹앱 URL (배포 후 입력 시 새로고침마다 자동 동기화) */
+const GAS_SYNC_URL = 'https://script.google.com/macros/s/AKfycbxjhFWIXvpxPFVB4JGTtXbgOXm-g2Klyso___oSB7m-JSFbfeOw95hpBj68Z1U347r0Cg/exec';
+
 const DEMO_FALLBACK = [
   {
     id:          'book01',
@@ -168,8 +171,19 @@ let allRowsCache = [];
 
 async function preloadCSV() {
   try {
-    console.info('[Sheet] Fetching CSV:', SHEET_CSV_URL);
-    const response = await fetch(SHEET_CSV_URL, { cache: 'no-cache' });
+    // Apps Script 동기화 URL이 설정되어 있다면 CSV 로드 전 동기화 호출 (새 파일 자동 등록)
+    if (typeof GAS_SYNC_URL !== 'undefined' && GAS_SYNC_URL) {
+      try {
+        console.info('[Sync] Triggering Drive-to-Sheet sync...');
+        await fetch(GAS_SYNC_URL, { mode: 'no-cors' });
+      } catch (syncErr) {
+        console.warn('[Sync] Drive sync failed or skipped:', syncErr);
+      }
+    }
+
+    const freshUrl = `${SHEET_CSV_URL}&t=${Date.now()}`;
+    console.info('[Sheet] Fetching CSV:', freshUrl);
+    const response = await fetch(freshUrl, { cache: 'no-store' });
     if (response.ok) {
       const csvText = await response.text();
       allRowsCache = parseCSV(csvText);
@@ -184,6 +198,39 @@ function convertDriveLink(url) {
   if (!url || !url.includes('drive.google.com')) return url;
   const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
   return match && match[1] ? `https://drive.google.com/uc?export=download&id=${match[1]}` : url;
+}
+
+/**
+ * 앱 사용 현황 로깅 (구글 시트 '앱 사용 현황' 탭에 자동 기록)
+ * @param {string} playTitle 재생된 책제목 (재생 이벤트인 경우)
+ * @param {string} downloadTitle 다운로드된 책제목 (다운로드 이벤트인 경우)
+ */
+function logAppUsage(playTitle = '', downloadTitle = '') {
+  if (!GAS_SYNC_URL) return;
+  try {
+    const now = new Date();
+    const kstOffset = 9 * 60; // KST (+09:00)
+    const utc = now.getTime() + (now.getTimezoneOffset() * 60000);
+    const kstDate = new Date(utc + (kstOffset * 60000));
+    const pad = n => String(n).padStart(2, '0');
+    const dateStr = `${kstDate.getFullYear()}-${pad(kstDate.getMonth() + 1)}-${pad(kstDate.getDate())} ${pad(kstDate.getHours())}:${pad(kstDate.getMinutes())}:${pad(kstDate.getSeconds())}`;
+
+    const params = new URLSearchParams({
+      type: 'log',
+      date: dateStr,
+      play: playTitle,
+      download: downloadTitle
+    });
+
+    const url = `${GAS_SYNC_URL}?${params.toString()}`;
+    if (navigator.sendBeacon) {
+      navigator.sendBeacon(url);
+    } else {
+      fetch(url, { mode: 'no-cors' });
+    }
+  } catch (e) {
+    console.warn('[Log] Failed to send usage log:', e);
+  }
 }
 
 /* ──────────────────────────────────────────────────────────────
@@ -254,6 +301,7 @@ function renderStoryContent(data) {
   // 다운로드는 브라우저 새 창에서 원본 링크로 직접 다운받는게 가장 안전함 (대용량 proxy 방지)
   const directDownloadUrl = imgBtnMatch ? `https://drive.google.com/uc?export=download&id=${imgBtnMatch[1]}` : finalAudioUrl;
   downloadBtn.dataset.url = directDownloadUrl;
+  downloadBtn.dataset.title = data.title || 'Untitled';
   downloadBtn.dataset.filename = (data.title || 'busan-story') + '.mp3';
 }
 
@@ -313,6 +361,9 @@ function initPlayer() {
       // 구글 드라이브 링크는 새 창(새 탭)으로 열면 즉시 강제 다운로드가 시작됩니다.
       window.open(url, '_blank');
       
+      // 앱 사용 현황에 다운로드 파일명 기록
+      logAppUsage('', downloadBtn.dataset.title || '');
+
       // UI 업데이트
       const label = document.getElementById('download-label');
       label.textContent = t('saveSuccess') || 'Saved!';
@@ -328,6 +379,9 @@ function initPlayer() {
 async function initApp() {
   initLangSwitcher();
   initPlayer();
+
+  // 앱 접속 시 '앱 사용 현황' 시트에 접속 날짜 기록
+  logAppUsage('', '');
 
   // 사용자 요청: 앱 시작 시 무조건 패스워드 입력창이 가장 먼저 나온다.
   showPasswordScreen();
@@ -416,7 +470,7 @@ function renderLibraryGrid() {
       
       const headerEl = document.createElement('div');
       headerEl.id = 'idx-' + cho;
-      headerEl.className = 'text-sepia-400 font-bold mt-4 mb-2 pl-1 border-b border-warm-700/50 text-sm';
+      headerEl.className = 'text-sepia-600 font-bold mt-4 mb-2 pl-1 border-b border-warm-200 text-sm';
       headerEl.textContent = cho;
       grid.appendChild(headerEl);
     }
@@ -427,10 +481,10 @@ function renderLibraryGrid() {
 
     bookEl.innerHTML = `
       <div class="flex-1 px-2 pl-6 z-10 text-left">
-        <div class="text-sepia-300 text-[9px] mb-0.5 uppercase tracking-widest font-sans opacity-70">Audio Story</div>
-        <h3 class="text-sepia-100 font-serif text-[15px] font-bold leading-snug break-keep pr-2">${bookTitle}</h3>
+        <div class="text-sepia-600 text-[10px] mb-0.5 uppercase tracking-widest font-sans font-semibold opacity-80">Audio Story</div>
+        <h3 class="text-warm-900 font-serif text-[15px] font-bold leading-snug break-keep pr-2">${bookTitle}</h3>
       </div>
-      <div class="text-sepia-400/50 pr-1 z-10">
+      <div class="text-sepia-500 pr-1 z-10">
         <i class="fa-solid fa-play text-sm"></i>
       </div>
     `;
@@ -458,6 +512,9 @@ window.playStory = function(foundData) {
     imageUrl:    foundData['imageurl']    || foundData['imageUrl'] || '',
     audioUrl:    foundData['audiourl']    || foundData['audioUrl'] || ''
   };
+
+  // 앱 사용 현황에 재생 파일명 기록
+  logAppUsage(storyData.title, '');
 
   renderStoryContent(storyData);
   showContent();
