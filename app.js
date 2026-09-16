@@ -747,6 +747,18 @@ function initBarcodeScanner() {
       if (code) processIsbnCode(code);
     };
   }
+
+  // 📸 바코드 사진 직접 촬영/업로드 인식 버튼 연결
+  const photoBtn = document.getElementById('barcode-photo-btn');
+  const fileInput = document.getElementById('barcode-file-input');
+
+  if (photoBtn && fileInput) {
+    photoBtn.onclick = () => fileInput.click();
+    fileInput.onchange = (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (file) handleBarcodePhotoUpload(file);
+    };
+  }
 }
 
 function renderLiveSearchResults(query) {
@@ -815,56 +827,136 @@ function applyCameraZoom(zoomFactor) {
   }
 }
 
-function startCameraScanner() {
-  const statusEl = document.getElementById('scanner-status');
-  if (statusEl) statusEl.textContent = '카메라 연결 중...';
+let zxingReader = null;
+let nativeBarcodeDetector = null;
+let nativeDetectInterval = null;
 
-  if (!window.Html5Qrcode) {
-    if (statusEl) statusEl.textContent = '스캐너 라이브러리를 로드하지 못했습니다.';
-    return;
+function handleBarcodePhotoUpload(file) {
+  if (!file) return;
+  const statusEl = document.getElementById('scanner-status');
+  if (statusEl) statusEl.textContent = '선명한 사진에서 바코드 읽는 중...';
+
+  // 1. Html5Qrcode.scanFile 사용
+  if (window.Html5Qrcode) {
+    const tempScanner = new Html5Qrcode('barcode-reader');
+    tempScanner.scanFile(file, true)
+      .then(decodedText => {
+        if (statusEl) statusEl.textContent = `사진 바코드 인식 성공: ${decodedText}`;
+        stopCameraScanner();
+        processIsbnCode(decodedText);
+      })
+      .catch(err => {
+        decodeWithZXingImage(file);
+      });
+  } else {
+    decodeWithZXingImage(file);
   }
 
-  // 기존 스캐너 정리 후 재연결
-  if (html5QrCodeScanner) {
+  function decodeWithZXingImage(imageFile) {
+    if (window.ZXing) {
+      try {
+        const reader = new ZXing.BrowserMultiFormatReader();
+        const img = new Image();
+        const url = URL.createObjectURL(imageFile);
+        img.src = url;
+        img.onload = () => {
+          reader.decodeFromImageElement(img)
+            .then(result => {
+              URL.revokeObjectURL(url);
+              const text = result.getText();
+              if (statusEl) statusEl.textContent = `사진 바코드 인식 성공: ${text}`;
+              stopCameraScanner();
+              processIsbnCode(text);
+            })
+            .catch(e => {
+              URL.revokeObjectURL(url);
+              alert('사진에서 바코드를 찾지 못했습니다. 아래 도서 검색창에 책제목을 입력하시면 즉시 검색됩니다!');
+              if (statusEl) statusEl.textContent = '수동 검색창에 도서명을 입력해 주세요.';
+            });
+        };
+      } catch(e) {
+        alert('도서 검색창에 책제목을 입력하시면 즉시 검색됩니다!');
+      }
+    } else {
+      alert('도서 검색창에 책제목을 입력하시면 즉시 검색됩니다!');
+    }
+  }
+}
+
+function startCameraScanner() {
+  const statusEl = document.getElementById('scanner-status');
+  if (statusEl) statusEl.textContent = '고화질 바코드 카메라 켜는 중...';
+
+  const videoEl = document.getElementById('barcode-video-stream');
+  const readerEl = document.getElementById('barcode-reader');
+
+  // 1. 하드웨어 네이티브 BarcodeDetector 우선 시도 (Android Chrome & iOS Safari 지원)
+  if ('BarcodeDetector' in window && videoEl && readerEl) {
     try {
-      html5QrCodeScanner.stop().then(() => {
-        try { html5QrCodeScanner.clear(); } catch(e) {}
-        initCameraStream();
-      }).catch(() => {
-        initCameraStream();
+      videoEl.classList.remove('hidden');
+      readerEl.classList.add('hidden');
+
+      navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
+      }).then(stream => {
+        videoEl.srcObject = stream;
+        videoEl.play();
+        if (statusEl) statusEl.textContent = '책 뒷면 바코드를 카메라 중앙에 비춰주세요';
+
+        const detector = new BarcodeDetector({ formats: ['ean_13', 'ean_8', 'code_128', 'qr_code'] });
+        if (nativeDetectInterval) clearInterval(nativeDetectInterval);
+        nativeDetectInterval = setInterval(async () => {
+          try {
+            const barcodes = await detector.detect(videoEl);
+            if (barcodes && barcodes.length > 0) {
+              const code = barcodes[0].rawValue;
+              console.info('[Native BarcodeDetector] Found code:', code);
+              clearInterval(nativeDetectInterval);
+              stopCameraScanner();
+              processIsbnCode(code);
+            }
+          } catch(e) {}
+        }, 200);
+
+        return;
+      }).catch(err => {
+        startZXingOrHtml5Fallback();
       });
       return;
     } catch(e) {
-      initCameraStream();
+      startZXingOrHtml5Fallback();
       return;
     }
   }
 
-let zxingReader = null;
+  startZXingOrHtml5Fallback();
 
-function startCameraScanner() {
-  const statusEl = document.getElementById('scanner-status');
-  if (statusEl) statusEl.textContent = '고화질 카메라 연결 중...';
-
-  // 1. ZXing 1D 바코드 고화질 엔진 우선 사용 (1080p 원본 미디어 스트림 감지)
-  if (window.ZXing) {
-    try {
-      if (!zxingReader) {
-        zxingReader = new ZXing.BrowserMultiFormatReader();
-      }
-      
-      const videoEl = document.getElementById('barcode-video-stream');
-      const readerEl = document.getElementById('barcode-reader');
-
-      if (videoEl && readerEl) {
+  function startZXingOrHtml5Fallback() {
+    // 2. ZXing EAN-13 정밀 초점 엔진 (TRY_HARDER 옵션 활성화)
+    if (window.ZXing && videoEl && readerEl) {
+      try {
         videoEl.classList.remove('hidden');
         readerEl.classList.add('hidden');
+
+        if (!zxingReader) {
+          const hints = new Map();
+          if (ZXing.DecodeHintType && ZXing.BarcodeFormat) {
+            hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+              ZXing.BarcodeFormat.EAN_13,
+              ZXing.BarcodeFormat.EAN_8,
+              ZXing.BarcodeFormat.CODE_128,
+              ZXing.BarcodeFormat.QR_CODE
+            ]);
+            hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+          }
+          zxingReader = new ZXing.BrowserMultiFormatReader(hints);
+        }
 
         const constraints = {
           video: {
             facingMode: 'environment',
-            width: { ideal: 1920, min: 1280 },
-            height: { ideal: 1080, min: 720 }
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
           }
         };
 
@@ -881,25 +973,22 @@ function startCameraScanner() {
             }
           }
         ).then(() => {
-          if (statusEl) statusEl.textContent = '책 뒷면 바코드를 카메라에 비춰주세요 (약 25~30cm 거리)';
+          if (statusEl) statusEl.textContent = '책 뒷면 바코드를 비추거나 [📸 사진 찍기]를 눌러주세요';
         }).catch(err => {
           console.warn('[ZXing] Camera HD start failed, trying Html5Qrcode fallback:', err);
-          videoEl.classList.add('hidden');
-          readerEl.classList.remove('hidden');
           startHtml5QrcodeFallback();
         });
         return;
+      } catch(e) {
+        startHtml5QrcodeFallback();
+        return;
       }
-    } catch(e) {
-      console.warn('[ZXing] Init error, using Html5Qrcode fallback:', e);
     }
+
+    startHtml5QrcodeFallback();
   }
 
-  startHtml5QrcodeFallback();
-
   function startHtml5QrcodeFallback() {
-    const videoEl = document.getElementById('barcode-video-stream');
-    const readerEl = document.getElementById('barcode-reader');
     if (videoEl) videoEl.classList.add('hidden');
     if (readerEl) readerEl.classList.remove('hidden');
 
@@ -949,8 +1038,7 @@ function startCameraScanner() {
         
         html5QrCodeScanner.start(cameraId, config, onScanSuccess, () => {})
           .then(() => {
-            if (statusEl) statusEl.textContent = '책에서 25~30cm 정도 멀리 떼고 [2x 돋보기]를 눌러주세요';
-            setTimeout(() => applyCameraZoom(2.0), 500);
+            if (statusEl) statusEl.textContent = '책 뒷면 바코드를 비추거나 [📸 사진 찍기]를 눌러주세요';
           })
           .catch(err => {
             startFallback();
@@ -965,17 +1053,30 @@ function startCameraScanner() {
     function startFallback() {
       html5QrCodeScanner.start({ facingMode: 'environment' }, config, onScanSuccess, () => {})
         .then(() => {
-          if (statusEl) statusEl.textContent = '책에서 25~30cm 정도 멀리 떼고 [2x 돋보기]를 눌러주세요';
-          setTimeout(() => applyCameraZoom(2.0), 500);
+          if (statusEl) statusEl.textContent = '책 뒷면 바코드를 비추거나 [📸 사진 찍기]를 눌러주세요';
         })
         .catch(err => {
-          if (statusEl) statusEl.textContent = '카메라 권한을 허용해 주시거나 아래 입력창에 도서명/ISBN을 입력해 주세요.';
+          if (statusEl) statusEl.textContent = '카메라를 시작할 수 없습니다. [📸 사진 찍기] 또는 도서명 검색을 이용해 주세요.';
         });
     }
   }
 }
 
 function stopCameraScanner() {
+  if (nativeDetectInterval) {
+    clearInterval(nativeDetectInterval);
+    nativeDetectInterval = null;
+  }
+
+  const videoEl = document.getElementById('barcode-video-stream');
+  if (videoEl && videoEl.srcObject) {
+    try {
+      const tracks = videoEl.srcObject.getTracks();
+      tracks.forEach(track => track.stop());
+      videoEl.srcObject = null;
+    } catch(e) {}
+  }
+
   if (zxingReader) {
     try {
       zxingReader.reset();
