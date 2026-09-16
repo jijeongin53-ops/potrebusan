@@ -619,27 +619,48 @@ function stopCameraScanner() {
 async function processIsbnCode(code) {
   const modal = document.getElementById('barcode-modal');
   const statusEl = document.getElementById('scanner-status');
-  const cleanCode = code.replace(/[^0-9X]/gi, '');
+  const rawInput = (code || '').trim();
 
-  if (statusEl) statusEl.textContent = `도서 찾는 중... (${cleanCode})`;
+  if (!rawInput) return;
 
-  // 1단계: 시트 데이터 중 title이나 description에 직접 일치하는지 확인
-  let match = findBookInCache(cleanCode);
+  if (statusEl) statusEl.textContent = `도서 찾는 중... (${rawInput})`;
 
-  // 2단계: API로 ISBN 조사하여 책 제목 찾기
+  // 1단계: 입력받은 제목/코드/ISBN이 라이브러리(시트 데이터)와 바로 일치하는지 확인 (공백/특수문자 무시)
+  let match = findBookInCache(rawInput);
+
+  // 2단계: 직접 일치하지 않고 숫자/ISBN 형태인 경우 API로 ISBN 조사하여 책 제목 찾기
+  const cleanCode = rawInput.replace(/[^0-9X]/gi, '');
   let searchedTitle = '';
-  if (!match && cleanCode.length >= 9) {
+
+  if (!match && cleanCode.length >= 8) {
     try {
-      const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanCode}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.items && data.items.length > 0) {
-          searchedTitle = data.items[0].volumeInfo?.title || '';
-          console.info('[Barcode] Found book title via Google Books API:', searchedTitle);
+      // 자체 서버리스 API로 알라딘/국립중앙도서관/OpenLibrary/GoogleBooks 서버측 조사
+      const apiRes = await fetch(`/api/isbn?code=${cleanCode}`);
+      if (apiRes.ok) {
+        const apiData = await apiRes.json();
+        if (apiData.title) {
+          searchedTitle = apiData.title;
+          console.info('[Barcode] Found book title via Serverless API:', searchedTitle);
         }
       }
-    } catch (e) {
-      console.warn('[Barcode] Google Books API fetch failed:', e);
+    } catch (apiErr) {
+      console.warn('[Barcode] Serverless API fetch error:', apiErr);
+    }
+
+    // 서버 API로 찾지 못한 경우 기존 Google Books 클라이언트 API 보조 시도
+    if (!searchedTitle) {
+      try {
+        const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanCode}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.items && data.items.length > 0) {
+            searchedTitle = data.items[0].volumeInfo?.title || '';
+            console.info('[Barcode] Found book title via Google Books API:', searchedTitle);
+          }
+        }
+      } catch (e) {
+        console.warn('[Barcode] Google Books API fetch failed:', e);
+      }
     }
 
     if (searchedTitle) {
@@ -654,22 +675,41 @@ async function processIsbnCode(code) {
   } else {
     const msg = searchedTitle 
       ? `'${searchedTitle}' 책을 확인했으나,\n현재 오디오북 라이브러리에 등록되지 않은 책입니다.`
-      : `바코드(${code})에 해당하는 도서를 찾지 못했거나 라이브러리에 없는 책입니다.`;
+      : `'${rawInput}'에 해당하는 도서를 찾지 못했거나 라이브러리에 없는 책입니다.`;
     alert(msg);
-    if (statusEl) statusEl.textContent = '다시 스캔하거나 다른 바코드를 시도하세요.';
+    if (statusEl) statusEl.textContent = '다시 스캔하거나 다른 도서명을 검색하세요.';
   }
 }
 
 function findBookInCache(query) {
-  if (!query || !allRowsCache) return null;
-  const cleanQuery = query.replace(/[\s\-_,.]/g, '').toLowerCase();
+  if (!query || !allRowsCache || allRowsCache.length === 0) return null;
+  
+  // 정규화: 모든 공백, 문장 부호, 특수문자를 제거하고 소문자로 변환
+  const normalize = (str) => (str || '').replace(/[\s\-_,.:;!?'"()\[\]~`"]/g, '').toLowerCase();
+  const cleanQuery = normalize(query);
 
+  if (!cleanQuery) return null;
+
+  // 1. 정확한 제목/ID 일치 (정규화 기준)
+  let match = allRowsCache.find(row => {
+    const title = normalize(row.title);
+    const id = normalize(row.id);
+    return title === cleanQuery || id === cleanQuery;
+  });
+  if (match) return match;
+
+  // 2. 부분 제목 일치 (정규화 기준)
+  match = allRowsCache.find(row => {
+    const title = normalize(row.title);
+    return title && (title.includes(cleanQuery) || cleanQuery.includes(title));
+  });
+  if (match) return match;
+
+  // 3. 설명(description) 또는 다른 항목 일치
   return allRowsCache.find(row => {
-    const title = (row.title || '').replace(/[\s\-_,.]/g, '').toLowerCase();
-    const desc = (row.description || '').replace(/[\s\-_,.]/g, '').toLowerCase();
-    
-    if (!title) return false;
-    return title.includes(cleanQuery) || cleanQuery.includes(title) || (desc && desc.includes(cleanQuery));
+    const desc = normalize(row.description);
+    const id = normalize(row.id);
+    return (desc && desc.includes(cleanQuery)) || (id && id.includes(cleanQuery));
   }) || null;
 }
 
