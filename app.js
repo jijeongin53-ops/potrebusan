@@ -840,13 +840,97 @@ function startCameraScanner() {
     }
   }
 
-  initCameraStream();
+let zxingReader = null;
 
-  function initCameraStream() {
+function startCameraScanner() {
+  const statusEl = document.getElementById('scanner-status');
+  if (statusEl) statusEl.textContent = '고화질 카메라 연결 중...';
+
+  // 1. ZXing 1D 바코드 고화질 엔진 우선 사용 (1080p 원본 미디어 스트림 감지)
+  if (window.ZXing) {
+    try {
+      if (!zxingReader) {
+        zxingReader = new ZXing.BrowserMultiFormatReader();
+      }
+      
+      const videoEl = document.getElementById('barcode-video-stream');
+      const readerEl = document.getElementById('barcode-reader');
+
+      if (videoEl && readerEl) {
+        videoEl.classList.remove('hidden');
+        readerEl.classList.add('hidden');
+
+        const constraints = {
+          video: {
+            facingMode: 'environment',
+            width: { ideal: 1920, min: 1280 },
+            height: { ideal: 1080, min: 720 }
+          }
+        };
+
+        zxingReader.decodeFromConstraints(
+          constraints,
+          'barcode-video-stream',
+          (result, err) => {
+            if (result) {
+              const text = result.getText();
+              console.info('[ZXing] Scanned barcode:', text);
+              if (statusEl) statusEl.textContent = `바코드 감지: ${text}`;
+              stopCameraScanner();
+              processIsbnCode(text);
+            }
+          }
+        ).then(() => {
+          if (statusEl) statusEl.textContent = '책 뒷면 바코드를 카메라에 비춰주세요 (약 25~30cm 거리)';
+        }).catch(err => {
+          console.warn('[ZXing] Camera HD start failed, trying Html5Qrcode fallback:', err);
+          videoEl.classList.add('hidden');
+          readerEl.classList.remove('hidden');
+          startHtml5QrcodeFallback();
+        });
+        return;
+      }
+    } catch(e) {
+      console.warn('[ZXing] Init error, using Html5Qrcode fallback:', e);
+    }
+  }
+
+  startHtml5QrcodeFallback();
+
+  function startHtml5QrcodeFallback() {
+    const videoEl = document.getElementById('barcode-video-stream');
+    const readerEl = document.getElementById('barcode-reader');
+    if (videoEl) videoEl.classList.add('hidden');
+    if (readerEl) readerEl.classList.remove('hidden');
+
+    if (!window.Html5Qrcode) {
+      if (statusEl) statusEl.textContent = '스캐너 라이브러리를 로드하지 못했습니다.';
+      return;
+    }
+
+    if (html5QrCodeScanner) {
+      try {
+        html5QrCodeScanner.stop().then(() => {
+          try { html5QrCodeScanner.clear(); } catch(e) {}
+          initHtml5QrcodeStream();
+        }).catch(() => {
+          initHtml5QrcodeStream();
+        });
+        return;
+      } catch(e) {
+        initHtml5QrcodeStream();
+        return;
+      }
+    }
+
+    initHtml5QrcodeStream();
+  }
+
+  function initHtml5QrcodeStream() {
     html5QrCodeScanner = new Html5Qrcode('barcode-reader');
     const config = {
       fps: 15,
-      qrbox: { width: 260, height: 140 },
+      qrbox: { width: 280, height: 160 },
       experimentalFeatures: {
         useBarCodeDetectorIfSupported: true
       }
@@ -858,39 +942,33 @@ function startCameraScanner() {
       processIsbnCode(decodedText);
     };
 
-    // 모바일 브라우저 호환성을 위해 기기 카메라 목록(getCameras) 조회 후 후면 카메라 ID로 연결
     Html5Qrcode.getCameras().then(devices => {
       if (devices && devices.length > 0) {
-        // 후면 카메라(back / rear / environment) 탐색
         const backCam = devices.find(d => /back|rear|environment|후면/i.test(d.label)) || devices[devices.length - 1];
         const cameraId = backCam ? backCam.id : devices[0].id;
         
         html5QrCodeScanner.start(cameraId, config, onScanSuccess, () => {})
           .then(() => {
-            if (statusEl) statusEl.textContent = '책에서 30cm 정도 멀리 떼고 [2x 돋보기]를 눌러주세요';
-            // 기본 2x 확대(돋보기) 자동시도하여 선명 초점 확보
+            if (statusEl) statusEl.textContent = '책에서 25~30cm 정도 멀리 떼고 [2x 돋보기]를 눌러주세요';
             setTimeout(() => applyCameraZoom(2.0), 500);
           })
           .catch(err => {
-            console.warn('[Camera] Device ID start failed, trying facingMode fallback:', err);
             startFallback();
           });
       } else {
         startFallback();
       }
     }).catch(err => {
-      console.warn('[Camera] getCameras failed, trying facingMode fallback:', err);
       startFallback();
     });
 
     function startFallback() {
       html5QrCodeScanner.start({ facingMode: 'environment' }, config, onScanSuccess, () => {})
         .then(() => {
-          if (statusEl) statusEl.textContent = '책에서 30cm 정도 멀리 떼고 [2x 돋보기]를 눌러주세요';
+          if (statusEl) statusEl.textContent = '책에서 25~30cm 정도 멀리 떼고 [2x 돋보기]를 눌러주세요';
           setTimeout(() => applyCameraZoom(2.0), 500);
         })
         .catch(err => {
-          console.error('[Camera] All start attempts failed:', err);
           if (statusEl) statusEl.textContent = '카메라 권한을 허용해 주시거나 아래 입력창에 도서명/ISBN을 입력해 주세요.';
         });
     }
@@ -898,6 +976,12 @@ function startCameraScanner() {
 }
 
 function stopCameraScanner() {
+  if (zxingReader) {
+    try {
+      zxingReader.reset();
+    } catch(e) {}
+  }
+
   if (html5QrCodeScanner) {
     try {
       html5QrCodeScanner.stop().then(() => {

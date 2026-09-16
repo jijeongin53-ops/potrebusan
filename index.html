@@ -22,6 +22,9 @@
   <!-- HTML5 QRCode Scanner CDN -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 
+  <!-- ZXing 1D Barcode Scanner Library CDN (High Definition Native Camera Barcode Reader) -->
+  <script src="https://unpkg.com/@zxing/library@latest/umd/index.min.js"></script>
+
   <!-- Tailwind Custom Config -->
   <script>
     tailwind.config = {
@@ -414,6 +417,7 @@
       <div class="flex-1 overflow-y-auto p-3 space-y-3">
         <!-- 카메라 스캐너 영역 -->
         <div class="flex flex-col items-center justify-center bg-black rounded-2xl min-h-[220px] relative overflow-hidden border border-warm-300">
+          <video id="barcode-video-stream" autoplay playsinline muted class="w-full h-[220px] object-cover hidden"></video>
           <div id="barcode-reader" class="w-full h-full min-h-[200px]"></div>
           <div id="scanner-status" class="text-sepia-300 text-xs py-1.5 px-3 text-center bg-black/60 w-full">카메라를 시작하는 중...</div>
 
