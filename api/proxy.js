@@ -12,13 +12,20 @@ export default async function handler(req) {
 
   try {
     const driveUrl = `https://drive.google.com/uc?export=download&id=${id}`;
+    const requestHeaders = {
+      'User-Agent': 'Mozilla/5.0'
+    };
     
+    // iOS Safari 등 미디어 재생을 위한 Range 헤더 전달
+    const rangeHeader = req.headers.get('range');
+    if (rangeHeader) {
+      requestHeaders['Range'] = rangeHeader;
+    }
+
     // Fetch the file from Google Drive (Edge runtime automatically follows 303 redirects)
     const response = await fetch(driveUrl, {
       method: req.method,
-      headers: {
-        'User-Agent': 'Mozilla/5.0'
-      }
+      headers: requestHeaders
     });
 
     // Create a new response to modify headers and strip the security blocks
@@ -27,6 +34,13 @@ export default async function handler(req) {
     newHeaders.delete('cross-origin-embedder-policy');
     newHeaders.delete('cross-origin-opener-policy');
     newHeaders.set('access-control-allow-origin', '*');
+    newHeaders.set('Accept-Ranges', 'bytes');
+    
+    // iOS Safari requires a proper audio Content-Type
+    const ct = newHeaders.get('content-type');
+    if (!ct || ct.includes('application/octet-stream')) {
+      newHeaders.set('Content-Type', 'audio/mp4');
+    }
 
     // Return the passthrough stream back to the client!
     return new Response(response.body, {
