@@ -573,7 +573,7 @@ function initBarcodeScanner() {
 
 function startCameraScanner() {
   const statusEl = document.getElementById('scanner-status');
-  if (statusEl) statusEl.textContent = '카메라 권한 요청 중...';
+  if (statusEl) statusEl.textContent = '카메라 권한 및 초점 설정 중...';
 
   if (!window.Html5Qrcode) {
     if (statusEl) statusEl.textContent = '스캐너 라이브러리를 로드하지 못했습니다.';
@@ -585,10 +585,33 @@ function startCameraScanner() {
   }
 
   html5QrCodeScanner = new Html5Qrcode('barcode-reader');
-  const config = { fps: 10, qrbox: { width: 240, height: 140 } };
+
+  // 모바일 카메라 초점 흐림을 방지하기 위한 HD 해상도 및 연속 자동초점(continuous focus) 비디오 제약조건
+  const videoConstraints = {
+    facingMode: 'environment',
+    width: { ideal: 1920, min: 1280 },
+    height: { ideal: 1080, min: 720 },
+    advanced: [
+      { focusMode: 'continuous' }
+    ]
+  };
+
+  const config = {
+    fps: 15, // 초점 이동 및 1D 바코드 빠른 감지를 위해 15 FPS 설정
+    qrbox: (viewfinderWidth, viewfinderHeight) => {
+      // 바코드(ISBN) 스캔에 최적화된 가로형 프레임 크기 계산
+      const width = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.85);
+      const height = Math.floor(width * 0.5);
+      return { width: Math.max(width, 220), height: Math.max(height, 110) };
+    },
+    aspectRatio: 1.777778, // 16:9 비율
+    experimentalFeatures: {
+      useBarCodeDetectorIfSupported: true
+    }
+  };
 
   html5QrCodeScanner.start(
-    { facingMode: 'environment' },
+    videoConstraints,
     config,
     (decodedText) => {
       if (statusEl) statusEl.textContent = `바코드 감지: ${decodedText}`;
@@ -599,10 +622,38 @@ function startCameraScanner() {
       // 스캔 진행 중
     }
   ).then(() => {
-    if (statusEl) statusEl.textContent = '책 뒷면의 바코드를 맞춰주세요';
+    if (statusEl) statusEl.textContent = '책 뒷면의 바코드를 카메라 박스에 맞춰주세요 (약 15~20cm 거리)';
+
+    // 실행 중인 비디오 트랙에 연속 자동 초점 및 선명도 제약조건 추가 적용
+    try {
+      const track = html5QrCodeScanner.getRunningTrack();
+      if (track && typeof track.applyConstraints === 'function') {
+        const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+        if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
+          track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
+        }
+      }
+    } catch(focusErr) {
+      console.warn('[Camera] Focus constraint notice:', focusErr);
+    }
   }).catch((err) => {
-    console.warn('[Barcode] Camera start failed:', err);
-    if (statusEl) statusEl.textContent = '카메라를 시작할 수 없습니다. 수동으로 ISBN을 입력해 주세요.';
+    console.warn('[Barcode] Camera HD start failed, falling back to standard constraints:', err);
+    
+    // HD 지원 실패 시 기본 환경 카메라로 폴백 시도
+    html5QrCodeScanner.start(
+      { facingMode: 'environment' },
+      { fps: 10, qrbox: { width: 250, height: 130 } },
+      (decodedText) => {
+        if (statusEl) statusEl.textContent = `바코드 감지: ${decodedText}`;
+        stopCameraScanner();
+        processIsbnCode(decodedText);
+      },
+      () => {}
+    ).then(() => {
+      if (statusEl) statusEl.textContent = '책 뒷면의 바코드를 맞춰주세요';
+    }).catch(() => {
+      if (statusEl) statusEl.textContent = '카메라를 시작할 수 없습니다. 수동으로 도서명/ISBN을 입력해 주세요.';
+    });
   });
 }
 
