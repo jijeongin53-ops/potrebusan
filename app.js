@@ -1018,8 +1018,12 @@ function startCameraScanner() {
   function initHtml5QrcodeStream() {
     html5QrCodeScanner = new Html5Qrcode('barcode-reader');
     const config = {
-      fps: 15,
-      qrbox: { width: 280, height: 160 },
+      fps: 20,
+      // 전체 영역 스캔: 바코드가 중앙이 아닌 구석에 있어도 화면의 95% 영역 전체를 감지
+      qrbox: (viewfinderWidth, viewfinderHeight) => ({
+        width: Math.floor(viewfinderWidth * 0.95),
+        height: Math.floor(viewfinderHeight * 0.85)
+      }),
       experimentalFeatures: {
         useBarCodeDetectorIfSupported: true
       }
@@ -1039,6 +1043,13 @@ function startCameraScanner() {
         html5QrCodeScanner.start(cameraId, config, onScanSuccess, () => {})
           .then(() => {
             if (statusEl) statusEl.textContent = '책 뒷면 바코드를 비추거나 [📸 사진 찍기]를 눌러주세요';
+            applyCameraZoom(1.5);
+            try {
+              const track = html5QrCodeScanner.getRunningTrack();
+              if (track && typeof track.applyConstraints === 'function') {
+                track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
+              }
+            } catch(e) {}
           })
           .catch(err => {
             startFallback();
@@ -1054,6 +1065,13 @@ function startCameraScanner() {
       html5QrCodeScanner.start({ facingMode: 'environment' }, config, onScanSuccess, () => {})
         .then(() => {
           if (statusEl) statusEl.textContent = '책 뒷면 바코드를 비추거나 [📸 사진 찍기]를 눌러주세요';
+          applyCameraZoom(1.5);
+          try {
+            const track = html5QrCodeScanner.getRunningTrack();
+            if (track && typeof track.applyConstraints === 'function') {
+              track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
+            }
+          } catch(e) {}
         })
         .catch(err => {
           if (statusEl) statusEl.textContent = '카메라를 시작할 수 없습니다. [📸 사진 찍기] 또는 도서명 검색을 이용해 주세요.';
