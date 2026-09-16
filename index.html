@@ -392,47 +392,56 @@
   </div>
 
   <!-- ═══════════════════════════════════════════════
-       SECTION 3.9: 바코드 스캐너 모달 (NEW)
+       SECTION 3.9: 바코드 스캐너 모달 (개선판)
   ══════════════════════════════════════════════════ -->
-  <div id="barcode-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-4 fade-in">
-    <div class="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl flex flex-col relative border border-warm-200">
+  <div id="barcode-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex flex-col items-center justify-center p-3 fade-in">
+    <div class="w-full max-w-sm bg-white rounded-3xl overflow-hidden shadow-2xl flex flex-col relative border border-warm-200 max-h-[90vh]">
       <!-- 닫기 버튼 -->
-      <button id="close-barcode-modal-btn" class="absolute top-3 right-3 z-20 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors">
+      <button id="close-barcode-modal-btn" class="absolute top-3 right-3 z-30 w-8 h-8 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors">
         <i class="fa-solid fa-xmark text-base"></i>
       </button>
 
       <!-- 모달 헤더 -->
-      <div class="p-4 text-center bg-warm-50 border-b border-warm-100">
-        <div class="inline-flex items-center justify-center w-10 h-10 rounded-full bg-sepia-100 text-sepia-700 mb-1.5">
-          <i class="fa-solid fa-barcode text-lg"></i>
+      <div class="p-3.5 text-center bg-warm-50 border-b border-warm-100 flex-shrink-0">
+        <div class="inline-flex items-center justify-center w-9 h-9 rounded-full bg-sepia-100 text-sepia-700 mb-1">
+          <i class="fa-solid fa-barcode text-base"></i>
         </div>
-        <h3 class="text-warm-900 font-serif font-bold text-base">Scan Book Barcode</h3>
-        <p class="text-warm-600 text-xs mt-0.5">책 뒷면 바코드(ISBN)를 카메라 중앙에 맞춰주세요</p>
+        <h3 class="text-warm-900 font-serif font-bold text-base">도서 스캔 및 검색</h3>
+        <p class="text-warm-600 text-xs mt-0.5">책 뒷면 바코드 스캔 또는 도서명 즉시 검색</p>
       </div>
 
-      <!-- 카메라 영역 -->
-      <div class="p-3 flex flex-col items-center justify-center bg-black min-h-[260px] relative">
-        <div id="barcode-reader" class="w-full rounded-xl overflow-hidden"></div>
-        <div id="scanner-status" class="text-sepia-300 text-xs mt-2 text-center animate-pulse">카메라 활성화 중...</div>
+      <!-- 모달 바디 (스크롤 가능) -->
+      <div class="flex-1 overflow-y-auto p-3 space-y-3">
+        <!-- 카메라 스캐너 영역 -->
+        <div class="flex flex-col items-center justify-center bg-black rounded-2xl min-h-[220px] relative overflow-hidden border border-warm-300">
+          <div id="barcode-reader" class="w-full h-full min-h-[200px]"></div>
+          <div id="scanner-status" class="text-sepia-300 text-xs py-1.5 px-3 text-center bg-black/60 w-full">카메라를 시작하는 중...</div>
 
-        <!-- 카메라 초점 & 확대(줌) 제어 툴바 -->
-        <div class="flex items-center justify-center gap-2 mt-3 z-10 w-full px-2">
-          <span class="text-white/70 text-[11px] font-medium mr-1"><i class="fa-solid fa-magnifying-glass text-xs mr-1"></i>확대(초점):</span>
-          <button type="button" id="zoom-1x-btn" class="px-2.5 py-1 bg-white/20 hover:bg-white/40 text-white text-xs rounded-lg font-semibold border border-white/30 active:scale-95 transition-all">1x</button>
-          <button type="button" id="zoom-2x-btn" class="px-2.5 py-1 bg-sepia-400 text-white text-xs rounded-lg font-semibold border border-sepia-300 active:scale-95 transition-all shadow-sm">2x 돋보기</button>
-          <button type="button" id="zoom-3x-btn" class="px-2.5 py-1 bg-white/20 hover:bg-white/40 text-white text-xs rounded-lg font-semibold border border-white/30 active:scale-95 transition-all">3x</button>
+          <!-- 카메라 제어 툴바 (줌) -->
+          <div class="flex items-center justify-center gap-2 py-2 bg-warm-900/90 w-full text-white">
+            <span class="text-white/80 text-[11px] font-medium mr-1"><i class="fa-solid fa-magnifying-glass text-xs mr-1"></i>초점/확대:</span>
+            <button type="button" id="zoom-1x-btn" class="px-2.5 py-0.5 bg-white/20 hover:bg-white/40 text-white text-xs rounded-lg font-semibold border border-white/30 active:scale-95 transition-all">1x</button>
+            <button type="button" id="zoom-2x-btn" class="px-2.5 py-0.5 bg-sepia-400 text-white text-xs rounded-lg font-semibold border border-sepia-300 active:scale-95 transition-all shadow-sm">2x 돋보기</button>
+            <button type="button" id="zoom-3x-btn" class="px-2.5 py-0.5 bg-white/20 hover:bg-white/40 text-white text-xs rounded-lg font-semibold border border-white/30 active:scale-95 transition-all">3x</button>
+          </div>
         </div>
-      </div>
 
-      <!-- 모달 푸터 / 초점 팁 & 수동 입력 지원 -->
-      <div class="p-3.5 bg-white border-t border-warm-100 flex flex-col gap-2.5">
-        <p class="text-[11px] text-warm-600 bg-warm-50 p-2 rounded-xl border border-warm-200/60 leading-tight">
-          💡 <strong>초점 팁:</strong> 책에서 30cm 정도 멀리 떼고 <strong>[2x 돋보기]</strong> 버튼을 누르면 초점이 선명하게 잡힙니다!
+        <!-- 수동 입력 & 실시간 검색 섹션 -->
+        <div class="bg-warm-50/80 p-3 rounded-2xl border border-warm-200/80 space-y-2">
+          <div class="flex gap-2">
+            <input type="text" id="manual-isbn-input" placeholder="도서명 또는 바코드 입력 (예: 황금숲, 혜잔...)" class="flex-1 px-3 py-2 text-xs border border-warm-200 rounded-xl outline-none focus:border-sepia-400 bg-white" />
+            <button id="manual-isbn-btn" class="px-4 py-2 bg-warm-800 text-white text-xs font-semibold rounded-xl hover:bg-warm-900 transition-colors shadow-sm">검색</button>
+          </div>
+
+          <!-- 실시간 검색 결과 리스트 (도서명 입력시 자동 표시) -->
+          <div id="search-live-results" class="hidden max-h-48 overflow-y-auto divide-y divide-warm-100 bg-white rounded-xl border border-warm-200 shadow-sm">
+            <!-- 자바스크립트로 검색 결과가 여기에 표시됨 -->
+          </div>
+        </div>
+
+        <p class="text-[11px] text-warm-600 bg-warm-100/50 p-2 rounded-xl border border-warm-200/60 leading-tight">
+          💡 <strong>스캔 팁:</strong> 책에서 30cm 정도 거리를 두고 <strong>[2x 돋보기]</strong> 버튼을 누르면 초점이 선명하게 맞춰집니다.
         </p>
-        <div class="flex gap-2">
-          <input type="text" id="manual-isbn-input" placeholder="도서명 또는 ISBN 직접 입력 (예: 황금숲, 978...)" class="flex-1 px-3 py-2 text-xs border border-warm-200 rounded-xl outline-none focus:border-sepia-400" />
-          <button id="manual-isbn-btn" class="px-4 py-2 bg-warm-800 text-white text-xs font-semibold rounded-xl hover:bg-warm-900 transition-colors">검색</button>
-        </div>
       </div>
     </div>
   </div>

@@ -543,6 +543,7 @@ function initBarcodeScanner() {
   const modal = document.getElementById('barcode-modal');
   const manualBtn = document.getElementById('manual-isbn-btn');
   const manualInput = document.getElementById('manual-isbn-input');
+  const liveResults = document.getElementById('search-live-results');
 
   const zoom1Btn = document.getElementById('zoom-1x-btn');
   const zoom2Btn = document.getElementById('zoom-2x-btn');
@@ -552,6 +553,11 @@ function initBarcodeScanner() {
 
   openBtn.onclick = () => {
     modal.classList.remove('hidden');
+    if (manualInput) manualInput.value = '';
+    if (liveResults) {
+      liveResults.classList.add('hidden');
+      liveResults.innerHTML = '';
+    }
     startCameraScanner();
   };
 
@@ -564,10 +570,10 @@ function initBarcodeScanner() {
   if (zoom2Btn) zoom2Btn.onclick = () => applyCameraZoom(2.0);
   if (zoom3Btn) zoom3Btn.onclick = () => applyCameraZoom(3.0);
 
-  if (manualBtn && manualInput) {
-    manualBtn.onclick = () => {
-      const code = manualInput.value.trim();
-      if (code) processIsbnCode(code);
+  if (manualInput) {
+    // 실시간 타이핑 감지하여 자동완성 도서 목록 표시
+    manualInput.oninput = (e) => {
+      renderLiveSearchResults(e.target.value);
     };
 
     manualInput.onkeypress = (e) => {
@@ -577,6 +583,60 @@ function initBarcodeScanner() {
       }
     };
   }
+
+  if (manualBtn && manualInput) {
+    manualBtn.onclick = () => {
+      const code = manualInput.value.trim();
+      if (code) processIsbnCode(code);
+    };
+  }
+}
+
+function renderLiveSearchResults(query) {
+  const container = document.getElementById('search-live-results');
+  if (!container) return;
+
+  if (!query || !query.trim()) {
+    container.classList.add('hidden');
+    container.innerHTML = '';
+    return;
+  }
+
+  const normalize = (str) => (str || '').replace(/[\s\-_,.:;!?'"()\[\]~`"]/g, '').toLowerCase();
+  const cleanQuery = normalize(query);
+
+  const matches = allRowsCache.filter(row => {
+    return Object.values(row).some(val => normalize(val).includes(cleanQuery));
+  }).slice(0, 10);
+
+  if (matches.length === 0) {
+    container.innerHTML = `<div class="p-3 text-xs text-warm-500 text-center">일치하는 도서가 없습니다. 아래 전체 라이브러리 목록에서 선택해 주세요.</div>`;
+    container.classList.remove('hidden');
+    return;
+  }
+
+  container.innerHTML = matches.map(m => `
+    <div class="live-search-item px-3 py-2.5 hover:bg-warm-50 cursor-pointer flex items-center justify-between border-b border-warm-100 last:border-0 transition-colors" data-id="${m.id}">
+      <div class="flex flex-col pr-2">
+        <span class="text-warm-900 font-serif text-xs font-bold leading-snug">${m.title || 'Untitled'}</span>
+        ${m.description ? `<span class="text-warm-500 text-[10px] truncate max-w-[200px] mt-0.5">${m.description}</span>` : ''}
+      </div>
+      <i class="fa-solid fa-play text-sepia-500 text-xs flex-shrink-0"></i>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.live-search-item').forEach((item, idx) => {
+    item.onclick = () => {
+      const found = matches[idx];
+      if (found) {
+        stopCameraScanner();
+        document.getElementById('barcode-modal').classList.add('hidden');
+        window.playStory(found);
+      }
+    };
+  });
+
+  container.classList.remove('hidden');
 }
 
 function applyCameraZoom(zoomFactor) {
@@ -760,11 +820,13 @@ async function processIsbnCode(code) {
     modal.classList.add('hidden');
     window.playStory(match);
   } else {
+    // 찾지 못했더라도 사용자가 직접 선택할 수 있도록 실시간 목록에 라이브러리 도서 후보 추천
+    renderLiveSearchResults(searchedTitle || rawInput);
     const msg = searchedTitle 
-      ? `'${searchedTitle}' 도서를 찾았으나,\n현재 구글 시트 오디오북 목록에 포함되지 않은 책입니다.`
-      : `'${rawInput}'에 해당하는 도서를 찾지 못했거나 라이브러리에 없는 책입니다.`;
+      ? `'${searchedTitle}' 도서를 외부 DB에서 확인했으나,\n현재 구글 시트 라이브러리에 등록되지 않은 도서입니다.\n\n아래 목록에서 시청할 도서를 직접 선택하실 수 있습니다.`
+      : `'${rawInput}' 바코드/도서명을 자동 연결하지 못했습니다.\n\n아래 실시간 목록에서 시청하실 도서명을 직접 선택해 주세요!`;
     alert(msg);
-    if (statusEl) statusEl.textContent = '다시 스캔하거나 다른 도서명을 검색하세요.';
+    if (statusEl) statusEl.textContent = '아래 실시간 목록에서 도서를 선택하거나 다른 키워드를 검색하세요.';
   }
 }
 
