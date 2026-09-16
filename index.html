@@ -414,10 +414,21 @@
       <div class="p-3 flex flex-col items-center justify-center bg-black min-h-[260px] relative">
         <div id="barcode-reader" class="w-full rounded-xl overflow-hidden"></div>
         <div id="scanner-status" class="text-sepia-300 text-xs mt-2 text-center animate-pulse">카메라 활성화 중...</div>
+
+        <!-- 카메라 초점 & 확대(줌) 제어 툴바 -->
+        <div class="flex items-center justify-center gap-2 mt-3 z-10 w-full px-2">
+          <span class="text-white/70 text-[11px] font-medium mr-1"><i class="fa-solid fa-magnifying-glass text-xs mr-1"></i>확대(초점):</span>
+          <button type="button" id="zoom-1x-btn" class="px-2.5 py-1 bg-white/20 hover:bg-white/40 text-white text-xs rounded-lg font-semibold border border-white/30 active:scale-95 transition-all">1x</button>
+          <button type="button" id="zoom-2x-btn" class="px-2.5 py-1 bg-sepia-400 text-white text-xs rounded-lg font-semibold border border-sepia-300 active:scale-95 transition-all shadow-sm">2x 돋보기</button>
+          <button type="button" id="zoom-3x-btn" class="px-2.5 py-1 bg-white/20 hover:bg-white/40 text-white text-xs rounded-lg font-semibold border border-white/30 active:scale-95 transition-all">3x</button>
+        </div>
       </div>
 
-      <!-- 모달 푸터 / 수동 입력 지원 -->
-      <div class="p-3.5 bg-white border-t border-warm-100 flex flex-col gap-2">
+      <!-- 모달 푸터 / 초점 팁 & 수동 입력 지원 -->
+      <div class="p-3.5 bg-white border-t border-warm-100 flex flex-col gap-2.5">
+        <p class="text-[11px] text-warm-600 bg-warm-50 p-2 rounded-xl border border-warm-200/60 leading-tight">
+          💡 <strong>초점 팁:</strong> 책에서 30cm 정도 멀리 떼고 <strong>[2x 돋보기]</strong> 버튼을 누르면 초점이 선명하게 잡힙니다!
+        </p>
         <div class="flex gap-2">
           <input type="text" id="manual-isbn-input" placeholder="도서명 또는 ISBN 직접 입력 (예: 황금숲, 978...)" class="flex-1 px-3 py-2 text-xs border border-warm-200 rounded-xl outline-none focus:border-sepia-400" />
           <button id="manual-isbn-btn" class="px-4 py-2 bg-warm-800 text-white text-xs font-semibold rounded-xl hover:bg-warm-900 transition-colors">검색</button>

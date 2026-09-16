@@ -45,7 +45,48 @@ export default async function handler(req) {
       console.warn('Aladin search error:', e);
     }
 
-    // 2. OpenLibrary (if Aladin didn't find)
+    // 2. Naver Book Search (if Aladin didn't find)
+    if (!title) {
+      try {
+        const naverRes = await fetch(`https://search.shopping.naver.com/book/search?query=${cleanCode}`, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          }
+        });
+        if (naverRes.ok) {
+          const html = await naverRes.text();
+          const match = html.match(/"bookTitle":"([^"]+)"/) || html.match(/"title":"([^"]+)"/);
+          if (match && match[1] && match[1] !== '네이버쇼핑') {
+            title = match[1];
+          }
+        }
+      } catch (e) {
+        console.warn('Naver search error:', e);
+      }
+    }
+
+    // 3. Daum Book Search (if Naver didn't find)
+    if (!title) {
+      try {
+        const daumRes = await fetch(`https://search.daum.net/search?w=book&q=${cleanCode}`, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+          }
+        });
+        if (daumRes.ok) {
+          const html = await daumRes.text();
+          const match = html.match(/class="tit_main[^"]*"[^>]*>(.*?)<\/a>/s);
+          if (match && match[1]) {
+            const clean = match[1].replace(/<[^>]+>/g, '').trim();
+            if (clean) title = clean;
+          }
+        }
+      } catch (e) {
+        console.warn('Daum search error:', e);
+      }
+    }
+
+    // 4. OpenLibrary (if previous didn't find)
     if (!title) {
       try {
         const olRes = await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${cleanCode}&format=json&jscmd=data`);
@@ -61,7 +102,7 @@ export default async function handler(req) {
       }
     }
 
-    // 3. Google Books API (Fallback)
+    // 5. Google Books API (Fallback)
     if (!title) {
       try {
         const gRes = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanCode}`);

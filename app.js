@@ -544,6 +544,10 @@ function initBarcodeScanner() {
   const manualBtn = document.getElementById('manual-isbn-btn');
   const manualInput = document.getElementById('manual-isbn-input');
 
+  const zoom1Btn = document.getElementById('zoom-1x-btn');
+  const zoom2Btn = document.getElementById('zoom-2x-btn');
+  const zoom3Btn = document.getElementById('zoom-3x-btn');
+
   if (!openBtn || !modal) return;
 
   openBtn.onclick = () => {
@@ -555,6 +559,10 @@ function initBarcodeScanner() {
     stopCameraScanner();
     modal.classList.add('hidden');
   };
+
+  if (zoom1Btn) zoom1Btn.onclick = () => applyCameraZoom(1.0);
+  if (zoom2Btn) zoom2Btn.onclick = () => applyCameraZoom(2.0);
+  if (zoom3Btn) zoom3Btn.onclick = () => applyCameraZoom(3.0);
 
   if (manualBtn && manualInput) {
     manualBtn.onclick = () => {
@@ -568,6 +576,25 @@ function initBarcodeScanner() {
         if (code) processIsbnCode(code);
       }
     };
+  }
+}
+
+function applyCameraZoom(zoomFactor) {
+  if (!html5QrCodeScanner) return;
+  try {
+    const track = html5QrCodeScanner.getRunningTrack();
+    if (track && typeof track.applyConstraints === 'function') {
+      const capabilities = track.getCapabilities ? track.getCapabilities() : {};
+      if (capabilities.zoom) {
+        const targetZoom = Math.min(Math.max(zoomFactor, capabilities.zoom.min || 1), capabilities.zoom.max || 5);
+        track.applyConstraints({ advanced: [{ zoom: targetZoom }] }).catch(() => {});
+        console.info(`[Zoom] Applied camera zoom: ${targetZoom}x`);
+      } else {
+        console.info('[Zoom] Hardware zoom not supported on this track');
+      }
+    }
+  } catch(e) {
+    console.warn('[Zoom] Apply zoom error:', e);
   }
 }
 
@@ -601,8 +628,11 @@ function startCameraScanner() {
   function initCameraStream() {
     html5QrCodeScanner = new Html5Qrcode('barcode-reader');
     const config = {
-      fps: 10,
-      qrbox: { width: 260, height: 140 }
+      fps: 15,
+      qrbox: { width: 260, height: 140 },
+      experimentalFeatures: {
+        useBarCodeDetectorIfSupported: true
+      }
     };
 
     const onScanSuccess = (decodedText) => {
@@ -620,7 +650,9 @@ function startCameraScanner() {
         
         html5QrCodeScanner.start(cameraId, config, onScanSuccess, () => {})
           .then(() => {
-            if (statusEl) statusEl.textContent = '책 뒷면 바코드를 사각형 안에 맞춰주세요';
+            if (statusEl) statusEl.textContent = '책에서 30cm 정도 멀리 떼고 [2x 돋보기]를 눌러주세요';
+            // 기본 2x 확대(돋보기) 자동시도하여 선명 초점 확보
+            setTimeout(() => applyCameraZoom(2.0), 500);
           })
           .catch(err => {
             console.warn('[Camera] Device ID start failed, trying facingMode fallback:', err);
@@ -637,7 +669,8 @@ function startCameraScanner() {
     function startFallback() {
       html5QrCodeScanner.start({ facingMode: 'environment' }, config, onScanSuccess, () => {})
         .then(() => {
-          if (statusEl) statusEl.textContent = '책 뒷면 바코드를 사각형 안에 맞춰주세요';
+          if (statusEl) statusEl.textContent = '책에서 30cm 정도 멀리 떼고 [2x 돋보기]를 눌러주세요';
+          setTimeout(() => applyCameraZoom(2.0), 500);
         })
         .catch(err => {
           console.error('[Camera] All start attempts failed:', err);
@@ -669,13 +702,22 @@ async function processIsbnCode(code) {
   // 1단계: 입력받은 도서명/코드/ISBN이 라이브러리(시트 데이터의 모든 열)와 바로 일치하는지 확인
   let match = findBookInCache(rawInput);
 
-  // 2단계: 직접 일치하지 않고 숫자/ISBN 형태인 경우 API로 ISBN 조사하여 책 제목 찾기
+  // 1.5단계: 로컬 캐시에 등록된 ISBN -> 도서명 맵핑 확인
   const cleanCode = rawInput.replace(/[^0-9X]/gi, '');
+  if (!match && cleanCode) {
+    const cachedTitle = localStorage.getItem(`isbn_map_${cleanCode}`);
+    if (cachedTitle) {
+      console.info(`[Barcode Cache] Found cached title for ISBN ${cleanCode}:`, cachedTitle);
+      match = findBookInCache(cachedTitle);
+    }
+  }
+
+  // 2단계: 직접 일치하지 않고 숫자/ISBN 형태인 경우 API로 ISBN 조사하여 책 제목 찾기
   let searchedTitle = '';
 
   if (!match && cleanCode.length >= 8) {
     try {
-      // 자체 서버리스 API로 알라딘/국립중앙도서관/OpenLibrary/GoogleBooks 서버측 조사
+      // 자체 서버리스 API로 알라딘/네이버/다음/국립중앙도서관/OpenLibrary/GoogleBooks 서버측 조사
       const apiRes = await fetch(`/api/isbn?code=${cleanCode}`);
       if (apiRes.ok) {
         const apiData = await apiRes.json();
@@ -706,6 +748,10 @@ async function processIsbnCode(code) {
 
     if (searchedTitle) {
       match = findBookInCache(searchedTitle);
+      if (match) {
+        // 캐시에 바코드와 도서명 맵핑 저장
+        try { localStorage.setItem(`isbn_map_${cleanCode}`, match.title || searchedTitle); } catch(e) {}
+      }
     }
   }
 
@@ -715,8 +761,8 @@ async function processIsbnCode(code) {
     window.playStory(match);
   } else {
     const msg = searchedTitle 
-      ? `'${searchedTitle}' 책을 확인했으나,\n현재 구글 시트 오디오북 라이브러리에 등록되지 않은 책입니다.`
-      : `'${rawInput}' 바코드/도서명이 라이브러리에 없습니다.\n\n💡 구글 시트의 'description'이나 새로운 열(isbn)에 해당 바코드 번호를 등록해 주세요!`;
+      ? `'${searchedTitle}' 도서를 찾았으나,\n현재 구글 시트 오디오북 목록에 포함되지 않은 책입니다.`
+      : `'${rawInput}'에 해당하는 도서를 찾지 못했거나 라이브러리에 없는 책입니다.`;
     alert(msg);
     if (statusEl) statusEl.textContent = '다시 스캔하거나 다른 도서명을 검색하세요.';
   }
