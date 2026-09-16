@@ -384,6 +384,7 @@ function initPlayer() {
 async function initApp() {
   initLangSwitcher();
   initPlayer();
+  initBarcodeScanner();
 
   // 앱 접속 시 '앱 사용 현황' 시트에 접속 날짜 기록
   logAppUsage('', '');
@@ -529,5 +530,147 @@ window.playStory = function(foundData) {
   renderStoryContent(storyData);
   showContent();
 };
+
+/* ──────────────────────────────────────────────────────────────
+   7. 책 바코드(ISBN) 스캐너 및 자동 매칭 열기 기능
+────────────────────────────────────────────────────────────── */
+
+let html5QrCodeScanner = null;
+
+function initBarcodeScanner() {
+  const openBtn = document.getElementById('open-barcode-btn');
+  const closeBtn = document.getElementById('close-barcode-modal-btn');
+  const modal = document.getElementById('barcode-modal');
+  const manualBtn = document.getElementById('manual-isbn-btn');
+  const manualInput = document.getElementById('manual-isbn-input');
+
+  if (!openBtn || !modal) return;
+
+  openBtn.onclick = () => {
+    modal.classList.remove('hidden');
+    startCameraScanner();
+  };
+
+  closeBtn.onclick = () => {
+    stopCameraScanner();
+    modal.classList.add('hidden');
+  };
+
+  if (manualBtn && manualInput) {
+    manualBtn.onclick = () => {
+      const code = manualInput.value.trim();
+      if (code) processIsbnCode(code);
+    };
+
+    manualInput.onkeypress = (e) => {
+      if (e.key === 'Enter') {
+        const code = manualInput.value.trim();
+        if (code) processIsbnCode(code);
+      }
+    };
+  }
+}
+
+function startCameraScanner() {
+  const statusEl = document.getElementById('scanner-status');
+  if (statusEl) statusEl.textContent = '카메라 권한 요청 중...';
+
+  if (!window.Html5Qrcode) {
+    if (statusEl) statusEl.textContent = '스캐너 라이브러리를 로드하지 못했습니다.';
+    return;
+  }
+
+  if (html5QrCodeScanner) {
+    try { html5QrCodeScanner.stop(); } catch(e) {}
+  }
+
+  html5QrCodeScanner = new Html5Qrcode('barcode-reader');
+  const config = { fps: 10, qrbox: { width: 240, height: 140 } };
+
+  html5QrCodeScanner.start(
+    { facingMode: 'environment' },
+    config,
+    (decodedText) => {
+      if (statusEl) statusEl.textContent = `바코드 감지: ${decodedText}`;
+      stopCameraScanner();
+      processIsbnCode(decodedText);
+    },
+    () => {
+      // 스캔 진행 중
+    }
+  ).then(() => {
+    if (statusEl) statusEl.textContent = '책 뒷면의 바코드를 맞춰주세요';
+  }).catch((err) => {
+    console.warn('[Barcode] Camera start failed:', err);
+    if (statusEl) statusEl.textContent = '카메라를 시작할 수 없습니다. 수동으로 ISBN을 입력해 주세요.';
+  });
+}
+
+function stopCameraScanner() {
+  if (html5QrCodeScanner) {
+    try {
+      html5QrCodeScanner.stop().then(() => {
+        html5QrCodeScanner.clear();
+      }).catch(() => {});
+    } catch(e) {}
+  }
+}
+
+async function processIsbnCode(code) {
+  const modal = document.getElementById('barcode-modal');
+  const statusEl = document.getElementById('scanner-status');
+  const cleanCode = code.replace(/[^0-9X]/gi, '');
+
+  if (statusEl) statusEl.textContent = `도서 찾는 중... (${cleanCode})`;
+
+  // 1단계: 시트 데이터 중 title이나 description에 직접 일치하는지 확인
+  let match = findBookInCache(cleanCode);
+
+  // 2단계: API로 ISBN 조사하여 책 제목 찾기
+  let searchedTitle = '';
+  if (!match && cleanCode.length >= 9) {
+    try {
+      const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=isbn:${cleanCode}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.items && data.items.length > 0) {
+          searchedTitle = data.items[0].volumeInfo?.title || '';
+          console.info('[Barcode] Found book title via Google Books API:', searchedTitle);
+        }
+      }
+    } catch (e) {
+      console.warn('[Barcode] Google Books API fetch failed:', e);
+    }
+
+    if (searchedTitle) {
+      match = findBookInCache(searchedTitle);
+    }
+  }
+
+  if (match) {
+    stopCameraScanner();
+    modal.classList.add('hidden');
+    window.playStory(match);
+  } else {
+    const msg = searchedTitle 
+      ? `'${searchedTitle}' 책을 확인했으나,\n현재 오디오북 라이브러리에 등록되지 않은 책입니다.`
+      : `바코드(${code})에 해당하는 도서를 찾지 못했거나 라이브러리에 없는 책입니다.`;
+    alert(msg);
+    if (statusEl) statusEl.textContent = '다시 스캔하거나 다른 바코드를 시도하세요.';
+  }
+}
+
+function findBookInCache(query) {
+  if (!query || !allRowsCache) return null;
+  const cleanQuery = query.replace(/[\s\-_,.]/g, '').toLowerCase();
+
+  return allRowsCache.find(row => {
+    const title = (row.title || '').replace(/[\s\-_,.]/g, '').toLowerCase();
+    const desc = (row.description || '').replace(/[\s\-_,.]/g, '').toLowerCase();
+    
+    if (!title) return false;
+    return title.includes(cleanQuery) || cleanQuery.includes(title) || (desc && desc.includes(cleanQuery));
+  }) || null;
+}
 
 document.addEventListener('DOMContentLoaded', initApp);
