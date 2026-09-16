@@ -573,95 +573,85 @@ function initBarcodeScanner() {
 
 function startCameraScanner() {
   const statusEl = document.getElementById('scanner-status');
-  if (statusEl) statusEl.textContent = '카메라 권한 및 초점 설정 중...';
+  if (statusEl) statusEl.textContent = '카메라 연결 중...';
 
   if (!window.Html5Qrcode) {
     if (statusEl) statusEl.textContent = '스캐너 라이브러리를 로드하지 못했습니다.';
     return;
   }
 
+  // 기존 스캐너 정리 후 재연결
   if (html5QrCodeScanner) {
-    try { html5QrCodeScanner.stop(); } catch(e) {}
+    try {
+      html5QrCodeScanner.stop().then(() => {
+        try { html5QrCodeScanner.clear(); } catch(e) {}
+        initCameraStream();
+      }).catch(() => {
+        initCameraStream();
+      });
+      return;
+    } catch(e) {
+      initCameraStream();
+      return;
+    }
   }
 
-  html5QrCodeScanner = new Html5Qrcode('barcode-reader');
+  initCameraStream();
 
-  // 모바일 카메라 초점 흐림을 방지하기 위한 HD 해상도 및 연속 자동초점(continuous focus) 비디오 제약조건
-  const videoConstraints = {
-    facingMode: 'environment',
-    width: { ideal: 1920, min: 1280 },
-    height: { ideal: 1080, min: 720 },
-    advanced: [
-      { focusMode: 'continuous' }
-    ]
-  };
+  function initCameraStream() {
+    html5QrCodeScanner = new Html5Qrcode('barcode-reader');
+    const config = {
+      fps: 10,
+      qrbox: { width: 260, height: 140 }
+    };
 
-  const config = {
-    fps: 15, // 초점 이동 및 1D 바코드 빠른 감지를 위해 15 FPS 설정
-    qrbox: (viewfinderWidth, viewfinderHeight) => {
-      // 바코드(ISBN) 스캔에 최적화된 가로형 프레임 크기 계산
-      const width = Math.floor(Math.min(viewfinderWidth, viewfinderHeight) * 0.85);
-      const height = Math.floor(width * 0.5);
-      return { width: Math.max(width, 220), height: Math.max(height, 110) };
-    },
-    aspectRatio: 1.777778, // 16:9 비율
-    experimentalFeatures: {
-      useBarCodeDetectorIfSupported: true
-    }
-  };
-
-  html5QrCodeScanner.start(
-    videoConstraints,
-    config,
-    (decodedText) => {
+    const onScanSuccess = (decodedText) => {
       if (statusEl) statusEl.textContent = `바코드 감지: ${decodedText}`;
       stopCameraScanner();
       processIsbnCode(decodedText);
-    },
-    () => {
-      // 스캔 진행 중
-    }
-  ).then(() => {
-    if (statusEl) statusEl.textContent = '책 뒷면의 바코드를 카메라 박스에 맞춰주세요 (약 15~20cm 거리)';
+    };
 
-    // 실행 중인 비디오 트랙에 연속 자동 초점 및 선명도 제약조건 추가 적용
-    try {
-      const track = html5QrCodeScanner.getRunningTrack();
-      if (track && typeof track.applyConstraints === 'function') {
-        const capabilities = track.getCapabilities ? track.getCapabilities() : {};
-        if (capabilities.focusMode && capabilities.focusMode.includes('continuous')) {
-          track.applyConstraints({ advanced: [{ focusMode: 'continuous' }] }).catch(() => {});
-        }
+    // 모바일 브라우저 호환성을 위해 기기 카메라 목록(getCameras) 조회 후 후면 카메라 ID로 연결
+    Html5Qrcode.getCameras().then(devices => {
+      if (devices && devices.length > 0) {
+        // 후면 카메라(back / rear / environment) 탐색
+        const backCam = devices.find(d => /back|rear|environment|후면/i.test(d.label)) || devices[devices.length - 1];
+        const cameraId = backCam ? backCam.id : devices[0].id;
+        
+        html5QrCodeScanner.start(cameraId, config, onScanSuccess, () => {})
+          .then(() => {
+            if (statusEl) statusEl.textContent = '책 뒷면 바코드를 사각형 안에 맞춰주세요';
+          })
+          .catch(err => {
+            console.warn('[Camera] Device ID start failed, trying facingMode fallback:', err);
+            startFallback();
+          });
+      } else {
+        startFallback();
       }
-    } catch(focusErr) {
-      console.warn('[Camera] Focus constraint notice:', focusErr);
-    }
-  }).catch((err) => {
-    console.warn('[Barcode] Camera HD start failed, falling back to standard constraints:', err);
-    
-    // HD 지원 실패 시 기본 환경 카메라로 폴백 시도
-    html5QrCodeScanner.start(
-      { facingMode: 'environment' },
-      { fps: 10, qrbox: { width: 250, height: 130 } },
-      (decodedText) => {
-        if (statusEl) statusEl.textContent = `바코드 감지: ${decodedText}`;
-        stopCameraScanner();
-        processIsbnCode(decodedText);
-      },
-      () => {}
-    ).then(() => {
-      if (statusEl) statusEl.textContent = '책 뒷면의 바코드를 맞춰주세요';
-    }).catch(() => {
-      if (statusEl) statusEl.textContent = '카메라를 시작할 수 없습니다. 수동으로 도서명/ISBN을 입력해 주세요.';
+    }).catch(err => {
+      console.warn('[Camera] getCameras failed, trying facingMode fallback:', err);
+      startFallback();
     });
-  });
+
+    function startFallback() {
+      html5QrCodeScanner.start({ facingMode: 'environment' }, config, onScanSuccess, () => {})
+        .then(() => {
+          if (statusEl) statusEl.textContent = '책 뒷면 바코드를 사각형 안에 맞춰주세요';
+        })
+        .catch(err => {
+          console.error('[Camera] All start attempts failed:', err);
+          if (statusEl) statusEl.textContent = '카메라 권한을 허용해 주시거나 아래 입력창에 도서명/ISBN을 입력해 주세요.';
+        });
+    }
+  }
 }
 
 function stopCameraScanner() {
   if (html5QrCodeScanner) {
     try {
       html5QrCodeScanner.stop().then(() => {
-        html5QrCodeScanner.clear();
+        try { html5QrCodeScanner.clear(); } catch(e) {}
       }).catch(() => {});
     } catch(e) {}
   }
@@ -676,7 +666,7 @@ async function processIsbnCode(code) {
 
   if (statusEl) statusEl.textContent = `도서 찾는 중... (${rawInput})`;
 
-  // 1단계: 입력받은 제목/코드/ISBN이 라이브러리(시트 데이터)와 바로 일치하는지 확인 (공백/특수문자 무시)
+  // 1단계: 입력받은 도서명/코드/ISBN이 라이브러리(시트 데이터의 모든 열)와 바로 일치하는지 확인
   let match = findBookInCache(rawInput);
 
   // 2단계: 직접 일치하지 않고 숫자/ISBN 형태인 경우 API로 ISBN 조사하여 책 제목 찾기
@@ -725,8 +715,8 @@ async function processIsbnCode(code) {
     window.playStory(match);
   } else {
     const msg = searchedTitle 
-      ? `'${searchedTitle}' 책을 확인했으나,\n현재 오디오북 라이브러리에 등록되지 않은 책입니다.`
-      : `'${rawInput}'에 해당하는 도서를 찾지 못했거나 라이브러리에 없는 책입니다.`;
+      ? `'${searchedTitle}' 책을 확인했으나,\n현재 구글 시트 오디오북 라이브러리에 등록되지 않은 책입니다.`
+      : `'${rawInput}' 바코드/도서명이 라이브러리에 없습니다.\n\n💡 구글 시트의 'description'이나 새로운 열(isbn)에 해당 바코드 번호를 등록해 주세요!`;
     alert(msg);
     if (statusEl) statusEl.textContent = '다시 스캔하거나 다른 도서명을 검색하세요.';
   }
@@ -741,27 +731,25 @@ function findBookInCache(query) {
 
   if (!cleanQuery) return null;
 
-  // 1. 정확한 제목/ID 일치 (정규화 기준)
+  // 1. 정확한 일치 (title, id, description, isbn, barcode 등 모든 열 대상)
   let match = allRowsCache.find(row => {
-    const title = normalize(row.title);
-    const id = normalize(row.id);
-    return title === cleanQuery || id === cleanQuery;
+    return Object.values(row).some(val => {
+      const normVal = normalize(val);
+      return normVal === cleanQuery;
+    });
   });
   if (match) return match;
 
-  // 2. 부분 제목 일치 (정규화 기준)
+  // 2. 부분 일치 검색 (제목, 설명, ID, 기타 모든 열 대상)
   match = allRowsCache.find(row => {
-    const title = normalize(row.title);
-    return title && (title.includes(cleanQuery) || cleanQuery.includes(title));
+    return Object.values(row).some(val => {
+      const normVal = normalize(val);
+      return normVal && (normVal.includes(cleanQuery) || cleanQuery.includes(normVal));
+    });
   });
   if (match) return match;
 
-  // 3. 설명(description) 또는 다른 항목 일치
-  return allRowsCache.find(row => {
-    const desc = normalize(row.description);
-    const id = normalize(row.id);
-    return (desc && desc.includes(cleanQuery)) || (id && id.includes(cleanQuery));
-  }) || null;
+  return null;
 }
 
 document.addEventListener('DOMContentLoaded', initApp);
